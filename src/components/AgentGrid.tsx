@@ -121,7 +121,8 @@ function AgentTile({ tile, named, pinned, onPin, onOpen }: TileProps) {
   const sessionWord = sessionRef === null ? null : sessionRef.kind === "path" ? lastSegment(sessionRef.value) : sessionRef.value.slice(0, 8);
   const cwd = pane.foreground_cwd ?? pane.cwd ?? null;
   const tabName = agentTabName(tab, machine.snapshot?.tabs.filter((candidate) => candidate.workspace_id === workspace.workspace_id) ?? [], t);
-  const herdrSession = machine.target?.session ?? null;
+  // a remote PC's name often ends with its session already (host/session): say it once
+  const herdrSession = machine.target?.session && !machine.name.endsWith(`/${machine.target.session}`) ? machine.target.session : null;
   const where = [named ? machine.name : null, herdrSession, project, tabName !== project ? tabName : null, branch && branch !== DETACHED ? branch : null]
     .filter((part): part is string => Boolean(part));
   const detail = [entry.agentLabel, agent?.name, sessionWord, lastSegment(cwd)].filter((part, index, all): part is string => Boolean(part) && all.indexOf(part) === index);
