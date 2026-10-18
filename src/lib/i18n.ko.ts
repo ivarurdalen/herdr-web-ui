@@ -259,6 +259,24 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "PC 바꾸기",
   "Selected": "선택됨",
+  // agent grid
+  "Agent grid": "에이전트 그리드",
+  "{n} agents": "에이전트 {n}개",
+  "Agents shown": "표시할 에이전트",
+  "Active": "활동 중",
+  "Columns": "열",
+  "Rows": "행",
+  "Previous page": "이전 페이지",
+  "Next page": "다음 페이지",
+  "Page {page} of {pages}": "{pages}쪽 중 {page}쪽",
+  "No agent is working or waiting right now.": "지금 작업 중이거나 대기 중인 에이전트가 없습니다.",
+  "No agents are running.": "실행 중인 에이전트가 없습니다.",
+  "Unpin {title}": "{title} 고정 해제",
+  "Pin {title}": "{title} 고정",
+  "Open {title}": "{title} 열기",
+  "This chat can't be shown.": "이 채팅을 표시할 수 없습니다.",
+  "Not connected to this PC. Nothing was sent.": "이 PC에 연결되어 있지 않습니다. 아무것도 보내지 않았습니다.",
+  "Message {title}": "{title}에게 메시지",
 };
 
 /** The parts KO is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */

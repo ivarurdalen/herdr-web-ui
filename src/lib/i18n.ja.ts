@@ -261,6 +261,24 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "PCを切り替え",
   "Selected": "選択中",
+  // agent grid
+  "Agent grid": "エージェントグリッド",
+  "{n} agents": "エージェント {n} 件",
+  "Agents shown": "表示するエージェント",
+  "Active": "稼働中",
+  "Columns": "列",
+  "Rows": "行",
+  "Previous page": "前のページ",
+  "Next page": "次のページ",
+  "Page {page} of {pages}": "{page} / {pages} ページ",
+  "No agent is working or waiting right now.": "作業中または待機中のエージェントはいません。",
+  "No agents are running.": "実行中のエージェントはありません。",
+  "Unpin {title}": "{title} の固定を解除",
+  "Pin {title}": "{title} を固定",
+  "Open {title}": "{title} を開く",
+  "This chat can't be shown.": "このチャットは表示できません。",
+  "Not connected to this PC. Nothing was sent.": "この PC に接続していません。何も送信していません。",
+  "Message {title}": "{title} へのメッセージ",
 };
 
 /** The parts JA is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */

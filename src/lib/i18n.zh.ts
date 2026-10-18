@@ -263,6 +263,24 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "切换电脑",
   "Selected": "已选择",
+  // agent grid
+  "Agent grid": "代理网格",
+  "{n} agents": "{n} 个代理",
+  "Agents shown": "显示的代理",
+  "Active": "活跃",
+  "Columns": "列",
+  "Rows": "行",
+  "Previous page": "上一页",
+  "Next page": "下一页",
+  "Page {page} of {pages}": "第 {page} 页，共 {pages} 页",
+  "No agent is working or waiting right now.": "目前没有正在工作或等待的代理。",
+  "No agents are running.": "没有正在运行的代理。",
+  "Unpin {title}": "取消固定 {title}",
+  "Pin {title}": "固定 {title}",
+  "Open {title}": "打开 {title}",
+  "This chat can't be shown.": "无法显示此聊天。",
+  "Not connected to this PC. Nothing was sent.": "未连接到此 PC。未发送任何内容。",
+  "Message {title}": "发送消息给 {title}",
 };
 
 /** The parts ZH is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */
