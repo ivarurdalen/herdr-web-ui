@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent } from "react";
-import { ArrowUp, ChevronLeft, ChevronRight, Maximize2, Pin, PinOff } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { ArrowLeftRight, ArrowUp, Maximize2, Plus, X } from "lucide-react";
 import type { Machine } from "../../shared/machines.ts";
 import { composerMessage, composerPayload } from "../lib/compose.ts";
-import { GRID_MAX_COLUMNS, GRID_MAX_ROWS, gridPage, gridTiles, lastSegment, loadGridLayout, storeGridLayout, type GridLayout, type GridTile } from "../lib/agentGrid.ts";
+import {
+  EMPTY_GRID_FILTER, GRID_MAX_COLUMNS, GRID_MAX_ROWS, gridChoices, gridTiles, lastSegment, loadGridLayout, matchesGridFilter, placeInSlot, storeGridLayout,
+  type GridFilter, type GridLayout, type GridTile,
+} from "../lib/agentGrid.ts";
 import { OpenFileContext } from "../lib/filePaths.ts";
 import { useT } from "../lib/i18n.ts";
 import { MachineContext } from "../lib/machineContext.tsx";
@@ -10,7 +13,6 @@ import type { MachineSession } from "../lib/machineSession.ts";
 import { useMachineSessions } from "../lib/machineSessionContext.tsx";
 import { DETACHED, usePaneBranch } from "../lib/paneBranch.ts";
 import { agentTabName } from "../lib/sidebarAgents.ts";
-import { currentSidebarPins, setSidebarPins, subscribeSidebarPins, toggleSidebarPin } from "../lib/sidebarPins.ts";
 import { AgentMark } from "./AgentMark.tsx";
 import { ChatView } from "./ChatView.tsx";
 import { RenderBoundary } from "./RenderBoundary.tsx";
@@ -38,30 +40,50 @@ function useSessionConnected(session: MachineSession | null): boolean {
 }
 
 const COUNTS = (max: number) => Array.from({ length: max }, (_, index) => index + 1);
+type FillKind = "repo" | "host" | "session";
 
-/** Every agent as a chat tile, several at once: the chat lens only, so no pane is attached or resized. */
+function tileTitle({ entry }: GridTile): string {
+  return entry.pane.label?.trim() || entry.agent?.title?.trim() || entry.pane.title?.trim() || displayPaneTitle(entry.pane);
+}
+
+/** Agents the user placed, each in its own chat tile: the chat lens only, so no pane is attached or resized. */
 export function AgentGrid({ machines, onOpen }: Props) {
   const t = useT();
   const [layout, setLayoutState] = useState<GridLayout>(loadGridLayout);
-  const [page, setPage] = useState(0);
-  const pins = useSyncExternalStore(subscribeSidebarPins, currentSidebarPins, currentSidebarPins);
+  const [filter, setFilter] = useState<GridFilter>(EMPTY_GRID_FILTER);
+  const [picking, setPicking] = useState<number | null>(null);
   const setLayout = (next: GridLayout): void => { setLayoutState(next); storeGridLayout(next); };
-  const tiles = useMemo(() => gridTiles(machines, pins, layout.filter), [machines, pins, layout.filter]);
-  const perPage = layout.columns * layout.rows;
-  const shown = gridPage(tiles, perPage, page);
-  const togglePin = useCallback((key: string) => setSidebarPins(toggleSidebarPin(currentSidebarPins(), key)), []);
+  const tiles = useMemo(() => gridTiles(machines), [machines]);
+  const byKey = useMemo(() => new Map(tiles.map((tile) => [tile.key, tile])), [tiles]);
+  const choices = useMemo(() => gridChoices(tiles), [tiles]);
+  const visible = layout.columns * layout.rows;
+  const hidden = layout.slots.slice(visible).filter((slot) => slot !== null).length;
   const multiple = machines.length > 1;
   const style = { "--grid-columns": layout.columns, "--grid-rows": layout.rows } as CSSProperties;
+
+  const fill = (value: string): void => {
+    const split = value.indexOf(":");
+    const kind = value.slice(0, split) as FillKind;
+    const name = value.slice(split + 1);
+    setLayout({ ...layout, slots: tiles.filter((tile) => tile[kind] === name).map((tile) => tile.key) });
+    setFilter({ ...EMPTY_GRID_FILTER, [kind]: name });
+    setPicking(null);
+  };
+  const place = (index: number, key: string | null): void => {
+    setLayout({ ...layout, slots: placeInSlot(layout.slots, index, key) });
+    setPicking(null);
+  };
 
   return (
     <OpenFileContext.Provider value={null}>
       <section className="agent-grid" aria-label={t("Agent grid")}>
         <div className="agent-grid-toolbar">
-          <span className="agent-grid-count">{t("{n} agents", { n: tiles.length })}</span>
-          <div className="segmented agent-grid-filter" role="group" aria-label={t("Agents shown")}>
-            <button type="button" aria-pressed={layout.filter === "all"} onClick={() => { setLayout({ ...layout, filter: "all" }); setPage(0); }}>{t("All")}</button>
-            <button type="button" aria-pressed={layout.filter === "active"} onClick={() => { setLayout({ ...layout, filter: "active" }); setPage(0); }}>{t("Active")}</button>
-          </div>
+          <select className="agent-grid-fill" value="" aria-label={t("Fill tiles")} onChange={(event) => fill(event.target.value)}>
+            <option value="">{t("Fill tiles…")}</option>
+            {([["repo", t("Repo"), choices.repos], ["host", t("PC"), choices.hosts], ["session", t("Session"), choices.sessions]] as const).map(([kind, label, names]) =>
+              <optgroup key={kind} label={label}>{names.map((name) => <option key={name} value={`${kind}:${name}`}>{name}</option>)}</optgroup>)}
+          </select>
+          <button type="button" className="btn btn-ghost" disabled={layout.slots.length === 0} onClick={() => setLayout({ ...layout, slots: [] })}>{t("Clear tiles")}</button>
           <label className="agent-grid-size">
             <span>{t("Columns")}</span>
             <select value={layout.columns} onChange={(event) => setLayout({ ...layout, columns: Number(event.target.value) })}>
@@ -74,19 +96,100 @@ export function AgentGrid({ machines, onOpen }: Props) {
               {COUNTS(GRID_MAX_ROWS).map((count) => <option key={count} value={count}>{count}</option>)}
             </select>
           </label>
-          {shown.pages > 1 && <div className="agent-grid-pages">
-            <button type="button" className="icon-button" aria-label={t("Previous page")} disabled={shown.page === 0} onClick={() => setPage(shown.page - 1)}><ChevronLeft /></button>
-            <span>{t("Page {page} of {pages}", { page: shown.page + 1, pages: shown.pages })}</span>
-            <button type="button" className="icon-button" aria-label={t("Next page")} disabled={shown.page >= shown.pages - 1} onClick={() => setPage(shown.page + 1)}><ChevronRight /></button>
-          </div>}
+          {hidden > 0 && <span className="agent-grid-hidden">{t("{n} more chosen agents don't fit. Add columns or rows to show them.", { n: hidden })}</span>}
         </div>
-        {shown.tiles.length === 0
-          ? <p className="agent-grid-empty">{t(layout.filter === "active" ? "No agent is working or waiting right now." : "No agents are running.")}</p>
-          : <div className="agent-grid-tiles" style={style}>
-            {shown.tiles.map((tile) => <AgentTile key={tile.key} tile={tile} named={multiple} pinned={pins.includes(tile.key)} onPin={togglePin} onOpen={onOpen} />)}
-          </div>}
+        <div className="agent-grid-tiles" style={style}>
+          {COUNTS(visible).map((position) => {
+            const index = position - 1;
+            const key = layout.slots[index] ?? null;
+            const tile = key === null ? undefined : byKey.get(key);
+            const picker = picking === index
+              ? <GridPicker index={index} tiles={tiles} slots={layout.slots} filter={filter} onFilter={setFilter} onChoose={(chosen) => place(index, chosen)} onClose={() => setPicking(null)} />
+              : null;
+            return tile
+              ? <AgentTile key={`${index}:${tile.key}`} tile={tile} named={multiple} picker={picker} onPick={() => setPicking(index)} onRemove={() => place(index, null)} onOpen={onOpen} />
+              : <article key={`${index}:empty`} className="agent-tile is-empty">
+                {key !== null && <p className="agent-grid-empty">{t("This agent is not available right now.")}</p>}
+                <div className="agent-tile-empty-actions">
+                  <button type="button" className="btn" onClick={() => setPicking(index)}><Plus aria-hidden="true" />{t("Choose an agent")}</button>
+                  {key !== null && <button type="button" className="btn btn-ghost" onClick={() => place(index, null)}>{t("Remove")}</button>}
+                </div>
+                {picker}
+              </article>;
+          })}
+        </div>
       </section>
     </OpenFileContext.Provider>
+  );
+}
+
+interface PickerProps {
+  index: number;
+  tiles: readonly GridTile[];
+  slots: readonly (string | null)[];
+  filter: GridFilter;
+  onFilter: (filter: GridFilter) => void;
+  onChoose: (key: string) => void;
+  onClose: () => void;
+}
+
+/** Chooses the agent one tile shows, narrowed by repo, PC and herdr session; the filters carry over to the next tile. */
+function GridPicker({ index, tiles, slots, filter, onFilter, onChoose, onClose }: PickerProps) {
+  const t = useT();
+  const choices = useMemo(() => gridChoices(tiles), [tiles]);
+  const matches = tiles.filter((tile) => matchesGridFilter(tile, filter));
+  const search = useRef<HTMLInputElement>(null);
+  useEffect(() => { search.current?.focus({ preventScroll: true }); }, []);
+  const field = (name: "repo" | "host" | "session", label: string, all: string, options: string[]) => (
+    <label className="agent-pick-field">
+      <span>{label}</span>
+      <select value={filter[name] ?? ""} onChange={(event) => onFilter({ ...filter, [name]: event.target.value || null })}>
+        <option value="">{all}</option>
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </select>
+    </label>
+  );
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    onClose();
+  };
+
+  return (
+    <div className="agent-pick" role="dialog" aria-label={t("Choose an agent")} onKeyDown={onKeyDown}>
+      <div className="agent-pick-filters">
+        <input type="search" className="agent-pick-search" value={filter.query} placeholder={t("Search agents")} aria-label={t("Search agents")}
+          ref={search} onChange={(event) => onFilter({ ...filter, query: event.target.value })} />
+        <button type="button" className="icon-button agent-tile-action" aria-label={t("Close")} onClick={onClose}><X /></button>
+        {field("repo", t("Repo"), t("All repos"), choices.repos)}
+        {field("host", t("PC"), t("All PCs"), choices.hosts)}
+        {field("session", t("Session"), t("All sessions"), choices.sessions)}
+      </div>
+      {matches.length === 0
+        ? <p className="agent-grid-empty">{t("No agents match.")}</p>
+        : <ul className="agent-pick-list">
+          {matches.map((tile) => {
+            const name = tile.entry.workspace.label;
+            const title = tileTitle(tile);
+            const placed = slots.indexOf(tile.key);
+            const meta = [tile.host, tile.session, tile.repo !== name ? tile.repo : null, title !== name ? title : null].filter(Boolean).join(" · ");
+            const mark = tile.entry.canonicalAgent ?? tile.entry.agentLabel;
+            return (
+              <li key={tile.key}>
+                <button type="button" className="agent-pick-row" aria-current={placed === index} onClick={() => onChoose(tile.key)}>
+                  {mark && <AgentMark agent={mark} size={16} />}
+                  <span className="agent-pick-text">
+                    <span className="agent-pick-name">{name}</span>
+                    <span className="agent-pick-meta">{meta}</span>
+                  </span>
+                  {placed >= 0 && <span className="agent-pick-placed">{t("Tile {n}", { n: placed + 1 })}</span>}
+                  <StatusBadge status={tile.entry.agent?.agent_status ?? tile.entry.pane.agent_status} />
+                </button>
+              </li>
+            );
+          })}
+        </ul>}
+    </div>
   );
 }
 
@@ -94,12 +197,13 @@ interface TileProps {
   tile: GridTile;
   /** the PC is named only beside another, as the sidebar does */
   named: boolean;
-  pinned: boolean;
-  onPin: (key: string) => void;
+  picker: ReactNode;
+  onPick: () => void;
+  onRemove: () => void;
   onOpen: (machineId: string, paneId: string) => void;
 }
 
-function AgentTile({ tile, named, pinned, onPin, onOpen }: TileProps) {
+function AgentTile({ tile, named, picker, onPick, onRemove, onOpen }: TileProps) {
   const t = useT();
   const { machine, entry } = tile;
   const { pane, workspace, tab, agent } = entry;
@@ -113,17 +217,17 @@ function AgentTile({ tile, named, pinned, onPin, onOpen }: TileProps) {
   const [failure, setFailure] = useState<string | null>(null);
   const [sentKey, setSentKey] = useState(0);
 
-  const title = pane.label?.trim() || agent?.title?.trim() || pane.title?.trim() || displayPaneTitle(pane);
+  const title = tileTitle(tile);
   const mark = entry.canonicalAgent ?? entry.agentLabel;
   const status = agent?.agent_status ?? pane.agent_status;
-  const project = workspace.worktree?.repo_name || workspace.label;
   const sessionRef = agent?.agent_session ?? pane.agent_session ?? null;
   const sessionWord = sessionRef === null ? null : sessionRef.kind === "path" ? lastSegment(sessionRef.value) : sessionRef.value.slice(0, 8);
   const cwd = pane.foreground_cwd ?? pane.cwd ?? null;
   const tabName = agentTabName(tab, machine.snapshot?.tabs.filter((candidate) => candidate.workspace_id === workspace.workspace_id) ?? [], t);
   // a remote PC's name often ends with its session already (host/session): say it once
   const herdrSession = machine.target?.session && !machine.name.endsWith(`/${machine.target.session}`) ? machine.target.session : null;
-  const where = [named ? machine.name : null, herdrSession, project, tabName !== project ? tabName : null, branch && branch !== DETACHED ? branch : null]
+  const label = workspace.label !== title && workspace.label !== tile.repo ? workspace.label : null;
+  const where = [named ? machine.name : null, herdrSession, tile.repo, label, tabName !== tile.repo ? tabName : null, branch && branch !== DETACHED ? branch : null]
     .filter((part): part is string => Boolean(part));
   const detail = [entry.agentLabel, agent?.name, sessionWord, lastSegment(cwd)].filter((part, index, all): part is string => Boolean(part) && all.indexOf(part) === index);
   const tooltip = [title, machine.target?.destination ?? machine.name, workspace.worktree?.checkout_path ?? workspace.label, sessionRef?.value, cwd, pane.pane_id]
@@ -154,11 +258,14 @@ function AgentTile({ tile, named, pinned, onPin, onOpen }: TileProps) {
           {mark && <AgentMark agent={mark} size={16} />}
           <span className="agent-tile-name">{title}</span>
           <StatusBadge status={status} />
-          <button type="button" className="icon-button agent-tile-action" aria-label={t(pinned ? "Unpin {title}" : "Pin {title}", { title })} aria-pressed={pinned} onClick={() => onPin(tile.key)}>
-            {pinned ? <PinOff /> : <Pin />}
+          <button type="button" className="icon-button agent-tile-action" aria-label={t("Change agent")} title={t("Change agent")} onClick={onPick}>
+            <ArrowLeftRight />
           </button>
           <button type="button" className="icon-button agent-tile-action" aria-label={t("Open {title}", { title })} title={t("Open {title}", { title })} onClick={() => onOpen(machine.id, pane.pane_id)}>
             <Maximize2 />
+          </button>
+          <button type="button" className="icon-button agent-tile-action" aria-label={t("Remove {title} from the grid", { title })} title={t("Remove {title} from the grid", { title })} onClick={onRemove}>
+            <X />
           </button>
         </div>
         {where.length > 0 && <div className="agent-tile-where">{where.join(" · ")}</div>}
@@ -181,6 +288,7 @@ function AgentTile({ tile, named, pinned, onPin, onOpen }: TileProps) {
         </button>
       </div>
       {failure !== null && <p className="agent-tile-failure" role="alert">{failure}</p>}
+      {picker}
     </article>
   );
 }
