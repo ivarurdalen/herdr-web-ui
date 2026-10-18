@@ -1,0 +1,205 @@
+/* The agent grid: chat tiles in fixed columns and rows that share the pane area's height. */
+.agent-grid {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.agent-grid-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--hairline) solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+.agent-grid-count {
+  color: var(--text-strong);
+  font-weight: var(--fw-semibold);
+}
+
+.agent-grid-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.agent-grid-size select {
+  height: var(--chip-h);
+  padding: 0 var(--space-1);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+
+.agent-grid-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-inline-start: auto;
+}
+
+.agent-grid-empty {
+  margin: var(--space-5) auto;
+  color: var(--text-dim);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+/* every row shares the height: a tile scrolls its own transcript, never the page */
+.agent-grid-tiles {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--grid-rows), minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.agent-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg-panel);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  /* the transcript reads smaller in a tile, so more of it fits */
+  --chat-scale: 0.86;
+  --chat-w: 100%;
+}
+
+.agent-tile:focus-within { border-color: var(--border-strong); }
+.agent-tile.is-working { border-top: var(--space-1) solid var(--status-working); }
+.agent-tile.is-blocked { border-top: var(--space-1) solid var(--status-blocked); }
+
+.agent-tile-head {
+  flex: 0 0 auto;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--hairline) solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.agent-tile-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.agent-tile-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-tile-action {
+  flex: none;
+  width: var(--chip-h);
+  height: var(--chip-h);
+}
+
+.agent-tile-action svg {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.agent-tile-where,
+.agent-tile-detail {
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-tile-where { color: var(--text); }
+
+.agent-tile-detail {
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+}
+
+/* ChatView fills a positioned box (ChatView.css) */
+.agent-tile-chat {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.agent-tile-chat .chat-view { padding: var(--space-2) var(--space-3) var(--space-3); }
+
+.agent-tile-prompt {
+  flex: 0 1 auto;
+  max-height: 60%;
+  overflow-y: auto;
+}
+
+.agent-tile-input {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  border-top: var(--hairline) solid var(--border);
+}
+
+.agent-tile-input textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-height: 6lh;
+  padding: var(--space-1) var(--space-2);
+  resize: none;
+  field-sizing: content;
+  background: var(--bg);
+  color: var(--text-strong);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: max(var(--fs-input), var(--fs-sm));
+  line-height: var(--lh-base);
+}
+
+.agent-tile-input textarea:focus { border-color: var(--accent); outline: 0; }
+
+/* with a mouse there is no zoom to avoid: the input takes the tile's small type */
+@media (hover: hover) and (pointer: fine) {
+  .agent-tile-input textarea { font-size: var(--fs-sm); }
+}
+
+.agent-tile-failure {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 var(--space-2) var(--space-1);
+  color: var(--status-blocked);
+  font-size: var(--fs-xs);
+}
+
+/* a narrow window stacks the tiles one per row, each tall enough to read */
+@media (max-width: 768px) {
+  .agent-grid-size { display: none; }
+
+  .agent-grid-tiles {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: minmax(60dvh, auto);
+    overflow-y: auto;
+  }
+}

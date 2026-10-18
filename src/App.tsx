@@ -1,5 +1,5 @@
 import { type CSSProperties, type DragEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Bell, Ellipsis, FolderOpen, Link, Menu, MessageSquare, PanelLeft, Search, SquareTerminal, X } from "lucide-react";
+import { Bell, Ellipsis, FolderOpen, LayoutGrid, Link, Menu, MessageSquare, PanelLeft, Search, SquareTerminal, X } from "lucide-react";
 
 import type { AgentStatus, ServerMessage, AccessRefusal, HealthAuth, HerdrPane } from "../shared/protocol.ts";
 import { ApiError, authenticate, createTab, fetchHealth, fetchBridgeHealth, fetchMachines, fetchSession, pairDevice, routeMissing, sendTestPush, signOut, splitPane, zoomPane, type HealthInfo } from "./lib/api.ts";
@@ -86,6 +86,8 @@ import { PaneFollowContext } from "./lib/paneSubmitContext.ts";
 import { SplitDropPreview } from "./components/SplitDropPreview.tsx";
 import { CrashProbe, RegionCrash } from "./components/AppCrash.tsx";
 import { RenderBoundary } from "./components/RenderBoundary.tsx";
+import { AgentGrid } from "./components/AgentGrid.tsx";
+import { loadGridOpen, storeGridOpen } from "./lib/agentGrid.ts";
 
 const APP_TITLE = "herdr web ui";
 /** how soon after a key press a focus counts as the user's own (lastKeyAtRef) */
@@ -377,6 +379,12 @@ export function App() {
   // two tabs side by side (lib/split.ts): the other half's pane, its side, and the active slot.
   // Only drawn where the sidebar stands beside the pane; a narrower window shows the active half
   const [split, setSplitState] = useState<SplitState | null>(storedSplit);
+  // the agent grid (lib/agentGrid.ts) takes the pane area's place while it is open
+  const [gridOpen, setGridOpenState] = useState(loadGridOpen);
+  const setGridOpen = useCallback((open: boolean) => {
+    setGridOpenState(open);
+    storeGridOpen(open);
+  }, []);
   const setSplit = useCallback((next: SplitState | null) => {
     setSplitState(next);
     storeSplit(next);
@@ -831,6 +839,11 @@ export function App() {
     selectionSince.current = rosterSeq.current;
   }, []);
   const selectTargetRef = useRef(selectTarget); selectTargetRef.current = selectTarget;
+  // a tile's Open, or a sidebar pick while the grid is open: the agent in the full view
+  const openFromGrid = useCallback((machineId: string, paneId: string | null, view?: PaneView) => {
+    if (paneId !== null) setGridOpen(false);
+    selectTarget(machineId, paneId, view);
+  }, [selectTarget, setGridOpen]);
   useEffect(() => {
     // An offline PC's cached roster cannot invalidate a selection. Once connected,
     // a closed pane (including one remembered across reloads) must release its selection.
@@ -1533,9 +1546,14 @@ export function App() {
           <button type="button" className="icon-button palette-button" aria-label={t("Command palette")} title={t("Command palette (⌘⇧K)")} onClick={() => openPalette()}>
             <Search />
           </button>
+          <button type="button" className="icon-button grid-toggle" aria-label={t("Agent grid")} title={t("Agent grid")} aria-pressed={gridOpen} onClick={() => { setGridOpen(!gridOpen); setDrawerOpen(false); }}>
+            <LayoutGrid />
+          </button>
         </div>
         <HeaderNote note={note} />
-        {note !== null ? null : selectedPane && crumb ? (
+        {note !== null ? null : gridOpen ? (
+          <><Brand /><span className="machine-context-name">{t("Agent grid")}</span></>
+        ) : selectedPane && crumb ? (
           <div className="context" title={crumb.tooltip}>
             <div className="context-title">
               {selectedAgent && <AgentMark agent={selectedAgent} size={18} />}
@@ -1556,7 +1574,7 @@ export function App() {
         ) : (
           <><Brand /><span className="machine-context-name">{selectedMachine?.name ?? selectedMachineId}</span></>
         )}
-        {selectedPane && (
+        {selectedPane && !gridOpen && (
           <div className="segmented view-switch" role="group" aria-label="Pane view">
             <button type="button" aria-pressed={view === "chat"} onClick={() => { setView("chat"); setDrawerOpen(false); }} title={t("Chat transcript (⌘⇧J)")}>
               <MessageSquare />
@@ -1569,7 +1587,7 @@ export function App() {
             </button>
           </div>
         )}
-        {selectedPane && wideScreen && (
+        {selectedPane && wideScreen && !gridOpen && (
           <>
             {/* opens Files, it is no third lens: set apart from the switch by a hairline */}
             <span className="header-divider" aria-hidden="true" />
@@ -1579,11 +1597,12 @@ export function App() {
           </>
         )}
         <div className="header-meta">
-          <ConnectionChip
+          {/* the chip speaks for the selected pane's terminal, which the grid does not mount */}
+          {!gridOpen && <ConnectionChip
             connected={connected}
             word={connWord}
             title={[connected ? null : connWord, targetHerdr ? t("herdr {version} · protocol {protocol}", { version: targetHerdr.version, protocol: targetHerdr.protocol }) : null].filter((part) => part !== null).join(" · ") || undefined}
-          />
+          />}
           {/* the Host's herdr is away: the step to take is on that PC (the sidebar's state line says the same) */}
           {!targetHerdr && <span className="pill pill-offline" title={selectedMachineId === "local" ? t("Start herdr on this PC, or check HERDR_SOCKET.") : undefined}>{t("herdr offline")}</span>}
           <span className="header-more">
@@ -1626,7 +1645,7 @@ export function App() {
           {/* a sidebar that cannot be drawn leaves the panes working */}
           <RenderBoundary resetKey={null} fallback={(retry) => <RegionCrash message={t("The sidebar can't be shown.")} retry={retry} />}>
             <CrashProbe region="sidebar" />
-            <MachineSidebar machines={machines} selectedMachineId={selectedMachineId} selectedPaneId={selectedPaneId} actions={actions} onSelect={selectTarget} onSetup={(machine, update = false) => { setUpdateRemote(update); setMachineDialog(machine); }} onNew={(id) => { setNewSessionMachineId(id); setNewTab(null); setNewSessionOpen(true); setDrawerOpen(false); }} />
+            <MachineSidebar machines={machines} selectedMachineId={selectedMachineId} selectedPaneId={selectedPaneId} actions={actions} onSelect={gridOpen ? openFromGrid : selectTarget} onSetup={(machine, update = false) => { setUpdateRemote(update); setMachineDialog(machine); }} onNew={(id) => { setNewSessionMachineId(id); setNewTab(null); setNewSessionOpen(true); setDrawerOpen(false); }} />
           </RenderBoundary>
           <SidebarResizer width={sidebarWidth} onResize={setSidebarWidth} />
         </aside>
@@ -1646,7 +1665,7 @@ export function App() {
         {health?.lan_exposure && <LanExposureNotice host={health.lan_exposure.host} onOpen={() => { setSettingsLinkPage("devices"); setSettingsOpen(true); }} />}
         {/* the pane's tab, or two tabs side by side (lib/split.ts): a tab dragged down out of its strip,
             or a sidebar row dragged over this area, opens its pane in the half it is dropped on */}
-        <div ref={paneAreaRef} className={`pane-split${splitOn ? " is-split" : ""}`} onDragEnterCapture={paneDragOver} onDragOverCapture={paneDragOver} onDragLeave={paneDragLeave} onDropCapture={paneDrop}>
+        {gridOpen ? <AgentGrid machines={machines} onOpen={openFromGrid} /> : <div ref={paneAreaRef} className={`pane-split${splitOn ? " is-split" : ""}`} onDragEnterCapture={paneDragOver} onDragOverCapture={paneDragOver} onDragLeave={paneDragLeave} onDropCapture={paneDrop}>
           {(["a", "b"] as const).map((slot) => {
             // one pane: the solo slot, or a split's active half where the window is too narrow for both
             if (!splitOn && slot !== (split ? split.active : soloSlot)) return null;
@@ -1771,7 +1790,7 @@ export function App() {
             );
           })}
           <SplitDropPreview visible={splitDragOn && (paneDragging || tabDrag !== null)} side={dropAt} />
-        </div>
+        </div>}
         </div>
         </WebPanelContext.Provider>
         </OpenFileContext.Provider>
