@@ -269,12 +269,9 @@ const BASE: Record<string, string> = {
   "This chat can't be shown.": "このチャットは表示できません。",
   "Not connected to this PC. Nothing was sent.": "この PC に接続していません。何も送信していません。",
   "Message {title}": "{title} へのメッセージ",
-  "Fill tiles": "タイルを埋める",
-  "Fill tiles…": "タイルを埋める…",
   "Repo": "リポジトリ",
   "PC": "PC",
   "Clear tiles": "タイルを空にする",
-  "{n} more chosen agents don't fit. Add columns or rows to show them.": "選んだエージェントがあと{n}件入りきりません。列か行を増やしてください。",
   "This agent is not available right now.": "このエージェントは現在利用できません。",
   "Choose an agent": "エージェントを選択",
   "Search agents": "エージェントを検索",
@@ -285,6 +282,14 @@ const BASE: Record<string, string> = {
   "Tile {n}": "タイル{n}",
   "Change agent": "エージェントを変更",
   "Remove {title} from the grid": "グリッドから{title}を削除",
+  "{n} more agents don't fit. Add columns or rows to show them.": "あと{n}件のエージェントが入りきりません。列か行を増やしてください。",
+  "View {n}": "ビュー{n}",
+  "View name": "ビュー名",
+  "View": "ビュー",
+  "New view": "新しいビュー",
+  "Delete view": "ビューを削除",
+  "Delete view {name}?": "ビュー「{name}」を削除しますか？",
+  "The view leaves every device. The agents keep running.": "ビューはすべてのデバイスから消えます。エージェントは動き続けます。",
 };
 
 /** The parts JA is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */
