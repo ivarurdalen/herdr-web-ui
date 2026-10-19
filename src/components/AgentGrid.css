@@ -63,6 +63,43 @@
   text-align: center;
 }
 
+/* one chip per repo opens the view of all its agents; the row scrolls sideways, never the page */
+.agent-grid-repos {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  overflow-x: auto;
+  border-bottom: var(--hairline) solid var(--border);
+  scrollbar-width: thin;
+}
+
+.agent-grid-repo {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--chip-h);
+  padding: 0 var(--space-2);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+
+.agent-grid-repo:hover { background: var(--bg-hover); }
+
+.agent-grid-repo[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--text-strong);
+}
+
+.agent-grid-repo-count { color: var(--text-dim); }
+
 /* every row shares the height: a tile scrolls its own transcript, never the page */
 .agent-grid-tiles {
   display: grid;
