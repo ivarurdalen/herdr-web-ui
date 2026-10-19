@@ -9,6 +9,8 @@ export interface Column<T> {
   value: (row: T) => string | null;
   /** how the cell shows it, when not as text */
   render?: (row: T) => ReactNode;
+  /** a cell that wraps its text instead of cutting it */
+  wrap?: boolean;
 }
 
 interface Props<T> {
@@ -80,7 +82,7 @@ export function DataTable<T>({ label, columns, rows, rowKey, expansion, empty }:
                 <tr className={expansion ? "data-table-row is-expandable" : "data-table-row"} aria-expanded={expansion ? expanded : undefined}
                   tabIndex={expansion ? 0 : undefined} onClick={() => expansion && setOpen(expanded ? null : key)}
                   onKeyDown={(event) => { if (expansion && (event.key === "Enter" || event.key === " ") && event.target === event.currentTarget) { event.preventDefault(); setOpen(expanded ? null : key); } }}>
-                  {columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : column.value(row) ?? ""}</td>)}
+                  {columns.map((column) => <td key={column.key} className={column.wrap ? "is-wrapping" : undefined}>{column.render ? column.render(row) : column.value(row) ?? ""}</td>)}
                 </tr>
                 {expanded && <tr className="data-table-expansion"><td colSpan={columns.length}>{expansion(row)}</td></tr>}
               </Fragment>

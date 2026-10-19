@@ -1,3 +1,4 @@
+import { AgentSessionStrip } from "./AgentSessionStrip.tsx";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -215,6 +216,8 @@ export interface ChatViewProps {
   onReplySelection?: (text: string | null) => void;
   /** a press on the pane's quote action is under way: the rows of the selection it may clear stay pinned */
   holdReplySelection?: boolean;
+  /** above the transcript, what the hub's record knows of this agent session (AgentSessionStrip) */
+  sessionStrip?: boolean;
 }
 
 /**
@@ -997,7 +1000,7 @@ function TerminalFallback({ paneId, visible }: { paneId: string; visible: boolea
 }
 
 // the app re-renders on every pane-status and poll; an unchanged transcript sits those out
-export const ChatView = memo(function ChatView({ paneId, presentationKey, finishEpoch, finishId, active = true, visible: paneVisible = true, pageScroll, refreshKey, invalidationKey = 0, onConversationWatch, conversationPushes = false, onTerminalOutput, sentKey = 0, localSend, navigation, connected, ended, agent, agentStatus, onMetadata, onRead, greeted = false, onPrompt, onSuggestion, onRestored, promptRefreshKey = 0, pendingAnswer = null, onPendingAnswerDone, promptDock = null, onPromptAnswered, title = null, onOpenTerminal, covered = false, peek = null, onCommandScreenClosed, onOutcomes, interactive = false, onRewindInTerminal, cwd = null, onReplySelection, holdReplySelection = false }: ChatViewProps) {
+export const ChatView = memo(function ChatView({ paneId, presentationKey, finishEpoch, finishId, active = true, visible: paneVisible = true, pageScroll, refreshKey, invalidationKey = 0, onConversationWatch, conversationPushes = false, onTerminalOutput, sentKey = 0, localSend, navigation, connected, ended, agent, agentStatus, onMetadata, onRead, greeted = false, onPrompt, onSuggestion, onRestored, promptRefreshKey = 0, pendingAnswer = null, onPendingAnswerDone, promptDock = null, onPromptAnswered, title = null, onOpenTerminal, covered = false, peek = null, onCommandScreenClosed, onOutcomes, interactive = false, onRewindInTerminal, cwd = null, onReplySelection, holdReplySelection = false, sessionStrip = false }: ChatViewProps) {
   const t = useT();
   const { fetchPaneConversation, peekPaneConversation, fetchPanePromptState, fetchPaneTranscript } = useMachineApi();
   const { settings } = useSettings();
@@ -1977,6 +1980,7 @@ export const ChatView = memo(function ChatView({ paneId, presentationKey, finish
       && endPresentation?.state === state && endPresentation.key === presentationKey
       && (agentStatus !== "done" || conversationFinishPresented({ source: state.conversationSource, turns: state.turns }))
       && readPresentation === presentationKey && (state.source === "conversation" ? ChatTimeline !== null : agent === null) ? presentationKey : undefined}>
+    {sessionStrip && <AgentSessionStrip paneId={paneId} />}
     <div className="chat-frame-body">
     {state.source === "conversation" ? ChatTimeline === null
       // its chunk is still loading: no turn is read until it arrives, so this is the loading state

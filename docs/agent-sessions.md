@@ -26,9 +26,17 @@ One row per agent session, keyed by the PC entry, the agent and the agent sessio
 
 - **Where:** PC, herdr session, repo, workspace, branch, folder, pane.
 - **What:** agent kind (`claude`, `codex`, ...), agent session id, title.
+- **About:** a description of at most three bullets an agent writes from the transcript, and when
+  it was last written.
 - **When:** first seen, last seen, and ended (when its pane or its agent session id went away
   while the PC was connected). An agent session seen again after it ended is open again.
 
 Links tie agent sessions to pull requests and Linear issues, many to many in both cases. Each link
 says who made it (`agent`, `manual` or `rule`) and why. Removing a link keeps it as `rejected`, so
 an automatic run does not add it back.
+
+## Agents
+
+The `agent-sessions` skill (`skills/agent-sessions/SKILL.md`) tells an agent how to describe and
+link agent sessions through `/api/agent-sessions`: it reads each transcript where it lives, writes
+the description, and links the pull requests and Linear issues it finds evidence for.

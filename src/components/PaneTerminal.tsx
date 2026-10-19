@@ -1057,6 +1057,7 @@ export function PaneTerminal({
             finishId={finishId}
             key={paneId}
             paneId={paneId}
+            sessionStrip
             active={active}
             visible={presented && shown}
             pageScroll={pageScroll}
