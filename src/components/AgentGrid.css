@@ -20,10 +20,28 @@
   color: var(--text-dim);
 }
 
-.agent-grid-size {
+.agent-grid-views,
+.agent-grid-field {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+}
+
+.agent-grid-field select,
+.agent-grid-view { max-width: 12em; }
+
+.agent-grid-name {
+  width: 12em;
+  height: var(--chip-h);
+  padding: 0 var(--space-2);
+  background: var(--bg-input);
+  color: var(--text-strong);
+  border: var(--hairline) solid var(--accent);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: max(var(--fs-input), var(--fs-sm));
+  outline: 0;
 }
 
 .agent-grid select {
@@ -35,8 +53,6 @@
   border-radius: var(--radius-sm);
   font: inherit;
 }
-
-.agent-grid-fill { max-width: 14em; }
 
 .agent-grid-hidden { color: var(--status-blocked); }
 

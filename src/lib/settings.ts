@@ -60,6 +60,7 @@ import type { StatusIndicators } from "./status.ts";
 import { WEB_LINK_TARGETS, type WebLinkTarget } from "./webPanel.ts";
 import { FILE_OPEN_TARGETS, type FilePresentation } from "./filePresentation.ts";
 import { CLAUDE_LAUNCH_MODES, CODEX_LAUNCH_MODES, type ClaudeLaunchMode, type CodexLaunchMode } from "./agentLaunchMode.ts";
+import { sanitizeGridViews, type GridView } from "./agentGrid.ts";
 
 export interface Settings {
   terminalInputMode: "auto" | "line" | "direct";
@@ -74,6 +75,8 @@ export interface Settings {
   sidebarRows: SidebarRows;
   /** The Agents list's order. Activity is display-only: herdr's own order never changes. */
   agentOrder: AgentOrder;
+  /** the agent grid's saved views (lib/agentGrid.ts) */
+  agentGridViews: GridView[];
   /** Agent logos: brand colors, or without color, so a list of one agent is not a stripe of tiles */
   agentMarks: AgentMarks;
   /** the sidebar's state marks: this app's own, or herdr's dots or symbols, as its `[ui] status_indicators` (lib/status.ts) */
@@ -179,7 +182,7 @@ export type DiffStyle = (typeof DIFF_STYLES)[number];
  * fileOpen, webLinks and the launch modes are not collected: the telemetry schema (shared/telemetry.ts) does not carry them. */
 type TelemetrySourceSettings = Omit<Settings,
   "keyBarExtras" | "keyBarItems" | "shortcutOverrides" | "terminalFontFamily" | "chatFontFamily"
-  | "quickReplies" | "usageOrder" | "usageHidden" | "fileOpen" | "webLinks" | "claudeLaunchMode" | "codexLaunchMode">;
+  | "quickReplies" | "usageOrder" | "usageHidden" | "fileOpen" | "webLinks" | "claudeLaunchMode" | "codexLaunchMode" | "agentGridViews">;
 
 /** Compare structured custom settings by content against this app's built-in defaults. */
 function differsFromDefault(value: unknown, defaultValue: unknown): boolean {
@@ -264,6 +267,8 @@ export const SETTING_SCOPE = {
   wrapCode: "device", markdownWidth: "device", diffStyle: "device", fileOpen: "device", webLinks: "device",
   // a new agent starts the same way whichever device opened it
   claudeLaunchMode: "shared", codexLaunchMode: "shared",
+  // a saved grid view opens the same on every device
+  agentGridViews: "shared",
 } as const satisfies Record<keyof Settings, "shared" | "device">;
 
 /** The shared part of `settings`, by the names shared/preferences.ts lists. */
@@ -280,6 +285,7 @@ export const DEFAULT_SETTINGS: Settings = {
   density: "comfortable",
   sidebarRows: "one",
   agentOrder: "workspace",
+  agentGridViews: [],
   agentMarks: "color",
   statusIndicators: "classic",
   palette: DEFAULT_THEME,
@@ -459,6 +465,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     density: density === "compact" || density === "comfortable" ? density : DEFAULT_SETTINGS.density,
     sidebarRows: record["sidebarRows"] === "one" || record["sidebarRows"] === "two" ? record["sidebarRows"] : DEFAULT_SETTINGS.sidebarRows,
     agentOrder: record["agentOrder"] === "workspace" || record["agentOrder"] === "activity" ? record["agentOrder"] : DEFAULT_SETTINGS.agentOrder,
+    agentGridViews: sanitizeGridViews(record["agentGridViews"]),
     agentMarks: record["agentMarks"] === "color" || record["agentMarks"] === "mono" ? record["agentMarks"] : DEFAULT_SETTINGS.agentMarks,
     statusIndicators: record["statusIndicators"] === "classic" || record["statusIndicators"] === "dots" || record["statusIndicators"] === "symbols" ? record["statusIndicators"] : DEFAULT_SETTINGS.statusIndicators,
     darkTheme,
