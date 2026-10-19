@@ -1,3 +1,4 @@
+import type { AgentSessionRecord, LinkRequest, LinkSuggestion, LinkTarget } from "../../shared/agent-sessions.ts";
 import type { PreferencesChange, SharedPreferences } from "../../shared/preferences.ts";
 import { machinePath, type BridgeHealth, type HerdrIdentity, type Machine, type SetupAction, type SetupJob, type SetupRequest } from "../../shared/machines.ts";
 import type {
@@ -450,6 +451,24 @@ async function sendJson(url: string, method: "POST" | "PATCH" | "DELETE", body: 
   });
   if (!response.ok) throw await errorFrom(url, response);
   return response;
+}
+
+/** The hub's agent session record (shared/agent-sessions.ts); empty where the server keeps none. */
+export async function fetchAgentSessions(): Promise<AgentSessionRecord[]> {
+  try { return (await getJson<{ agent_sessions: AgentSessionRecord[] }>("/api/agent-sessions")).agent_sessions; }
+  catch (error) { if (error instanceof ApiError && error.status === 404) return []; throw error; }
+}
+
+export async function linkAgentSession(id: number, link: LinkRequest): Promise<AgentSessionRecord> {
+  return ((await (await sendJson(`/api/agent-sessions/${id}/links`, "POST", link)).json()) as { agent_session: AgentSessionRecord }).agent_session;
+}
+
+export async function unlinkAgentSession(id: number, target: LinkTarget): Promise<AgentSessionRecord> {
+  return ((await (await sendJson(`/api/agent-sessions/${id}/links`, "DELETE", target)).json()) as { agent_session: AgentSessionRecord }).agent_session;
+}
+
+export async function fetchLinkSuggestions(id: number): Promise<LinkSuggestion[]> {
+  return (await getJson<{ suggestions: LinkSuggestion[] }>(`/api/agent-sessions/${id}/suggestions`)).suggestions;
 }
 
 /** GET /api/plugins/actions: the PC's herdr plugins and the actions it can run. */
