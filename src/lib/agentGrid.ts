@@ -1,7 +1,8 @@
 /**
- * The agent grid: a grid of fixed columns and rows whose tiles each show one agent the user chose,
- * from any PC. Only the chat lens is drawn, so no tile attaches a terminal or resizes a pane herdr
- * shows. Every tile starts empty; a tile holds its agent by sidebar pin key (`machine:pane`).
+ * The agent grid: saved views, each a grid of fixed columns and rows whose tiles show agents from
+ * any PC. Only the chat lens is drawn, so no tile attaches a terminal or resizes a pane herdr
+ * shows. A tile holds an agent the user chose, by sidebar pin key (`machine:pane`); a view with a
+ * repo, PC or session filter also fills its empty tiles with every agent that matches, live.
  */
 
 import type { Machine } from "../../shared/machines.ts";
@@ -9,11 +10,18 @@ import type { WorkspaceInfo } from "../../shared/protocol.ts";
 import { sidebarAgents, type SidebarAgent } from "./sidebarAgents.ts";
 import { sidebarPinKey } from "./sidebarPins.ts";
 
-export interface GridLayout {
+export interface GridView {
+  id: string;
+  name: string;
   columns: number;
   rows: number;
-  /** the agent key each tile shows, by position; null or past the end is an empty tile */
+  repo: string | null;
+  host: string | null;
+  session: string | null;
+  /** the agent the user put in each tile, by position; null or past the end leaves the tile to the filter */
   slots: Array<string | null>;
+  /** agents the user took out, so the filter does not bring them back */
+  excluded: string[];
 }
 
 export interface GridTile {
@@ -37,43 +45,61 @@ export interface GridFilter {
 export const GRID_MAX_COLUMNS = 6;
 export const GRID_MAX_ROWS = 4;
 const MAX_SLOTS = GRID_MAX_COLUMNS * GRID_MAX_ROWS;
-const MAX_KEY_LENGTH = 300;
-export const DEFAULT_GRID_LAYOUT: GridLayout = { columns: 3, rows: 2, slots: [] };
+// the views travel in the shared preferences, which the server caps in size
+const MAX_VIEWS = 12;
+const MAX_EXCLUDED = 48;
+const MAX_TEXT = 300;
 export const EMPTY_GRID_FILTER: GridFilter = { query: "", repo: null, host: null, session: null };
 
-const LAYOUT_KEY = "herdr-web-ui:agent-grid-slots";
+const VIEW_KEY = "herdr-web-ui:agent-grid-view";
 const OPEN_KEY = "herdr-web-ui:agent-grid-open";
+
+export function newGridView(id: string, name: string): GridView {
+  return { id, name, columns: 3, rows: 2, repo: null, host: null, session: null, slots: [], excluded: [] };
+}
 
 function clamp(value: unknown, max: number, fallback: number): number {
   return typeof value === "number" && Number.isInteger(value) ? Math.min(max, Math.max(1, value)) : fallback;
 }
 
-export function parseGridLayout(raw: string | null): GridLayout {
-  try {
-    const value = raw === null ? null : JSON.parse(raw) as Partial<GridLayout> | null;
-    if (value === null || typeof value !== "object") return DEFAULT_GRID_LAYOUT;
-    const slots = Array.isArray(value.slots) ? value.slots.slice(0, MAX_SLOTS) : [];
-    return {
-      columns: clamp(value.columns, GRID_MAX_COLUMNS, DEFAULT_GRID_LAYOUT.columns),
-      rows: clamp(value.rows, GRID_MAX_ROWS, DEFAULT_GRID_LAYOUT.rows),
-      slots: slots.map((slot) => typeof slot === "string" && slot.length > 0 && slot.length <= MAX_KEY_LENGTH ? slot : null),
-    };
-  } catch {
-    return DEFAULT_GRID_LAYOUT;
+const text = (value: unknown): string | null => typeof value === "string" && value.length > 0 && value.length <= MAX_TEXT ? value : null;
+
+/** The saved views as stored or sent by another browser, cut to the shape and the limits. */
+export function sanitizeGridViews(raw: unknown): GridView[] {
+  if (!Array.isArray(raw)) return [];
+  const views: GridView[] = [];
+  for (const value of raw.slice(0, MAX_VIEWS)) {
+    if (typeof value !== "object" || value === null) continue;
+    const view = value as Record<string, unknown>;
+    const id = text(view["id"]);
+    if (id === null || views.some((other) => other.id === id)) continue;
+    views.push({
+      id,
+      name: (typeof view["name"] === "string" ? view["name"] : "").slice(0, 80),
+      columns: clamp(view["columns"], GRID_MAX_COLUMNS, 3),
+      rows: clamp(view["rows"], GRID_MAX_ROWS, 2),
+      repo: text(view["repo"]),
+      host: text(view["host"]),
+      session: text(view["session"]),
+      slots: Array.isArray(view["slots"]) ? view["slots"].slice(0, MAX_SLOTS).map(text) : [],
+      excluded: Array.isArray(view["excluded"]) ? view["excluded"].map(text).filter((key): key is string => key !== null).slice(-MAX_EXCLUDED) : [],
+    });
   }
+  return views;
 }
 
-// storage can throw (a private window, blocked site data): the grid then starts from the defaults
-export function loadGridLayout(): GridLayout {
-  try { return parseGridLayout(localStorage.getItem(LAYOUT_KEY)); } catch { return DEFAULT_GRID_LAYOUT; }
+// storage can throw (a private window, blocked site data): the grid then opens on the first view
+export function loadGridViewId(): string | null {
+  try { return localStorage.getItem(VIEW_KEY); } catch { return null; }
 }
 
-export function storeGridLayout(layout: GridLayout): void {
-  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch { /* per-browser convenience only */ }
+export function storeGridViewId(id: string): void {
+  try { localStorage.setItem(VIEW_KEY, id); } catch { /* per-browser convenience only */ }
 }
 
+/** Open unless this browser closed it: the grid is what this build is for. */
 export function loadGridOpen(): boolean {
-  try { return localStorage.getItem(OPEN_KEY) === "1"; } catch { return false; }
+  try { return localStorage.getItem(OPEN_KEY) !== "0"; } catch { return true; }
 }
 
 export function storeGridOpen(open: boolean): void {
@@ -125,6 +151,43 @@ export function matchesGridFilter(tile: GridTile, filter: GridFilter): boolean {
   const { pane, agent, workspace, agentLabel } = tile.entry;
   return [workspace.label, pane.label, pane.title, agent?.title, agent?.name, agentLabel, tile.repo, tile.host, tile.session]
     .some((text) => text?.toLowerCase().includes(query));
+}
+
+export function viewFilter(view: GridView): GridFilter {
+  return { query: "", repo: view.repo, host: view.host, session: view.session };
+}
+
+const filtered = (view: GridView): boolean => view.repo !== null || view.host !== null || view.session !== null;
+
+/**
+ * The agent in each of the view's `count` tiles: the user's choices where made, the filter's
+ * matches in the empty ones; `hidden` counts the agents of the view that do not fit.
+ */
+export function arrangeView(view: GridView, tiles: readonly GridTile[], count: number): { keys: Array<string | null>; hidden: number } {
+  const placed = new Set(view.slots.filter((slot): slot is string => slot !== null));
+  const matches = filtered(view)
+    ? tiles.filter((tile) => !placed.has(tile.key) && !view.excluded.includes(tile.key) && matchesGridFilter(tile, viewFilter(view))).map((tile) => tile.key)
+    : [];
+  let next = 0;
+  const keys = Array.from({ length: count }, (_, index) => view.slots[index] ?? (next < matches.length ? matches[next++]! : null));
+  const hidden = view.slots.slice(count).filter((slot) => slot !== null).length + matches.length - next;
+  return { keys, hidden };
+}
+
+/** The view with `key` chosen for tile `index`. */
+export function chooseInView(view: GridView, index: number, key: string): GridView {
+  return { ...view, slots: placeInSlot(view.slots, index, key), excluded: view.excluded.filter((other) => other !== key) };
+}
+
+/** The view without the agent in tile `index`; the filter does not bring it back. */
+export function removeFromView(view: GridView, index: number, key: string): GridView {
+  const excluded = filtered(view) ? [...view.excluded.filter((other) => other !== key), key].slice(-MAX_EXCLUDED) : view.excluded;
+  return { ...view, slots: placeInSlot(view.slots, index, null), excluded };
+}
+
+/** A new filter starts the view over from what it matches. */
+export function filterView(view: GridView, filter: Pick<GridView, "repo" | "host" | "session">): GridView {
+  return { ...view, ...filter, slots: [], excluded: [] };
 }
 
 /** The slots with `key` in tile `index` (null empties it); an agent shown elsewhere moves here. */

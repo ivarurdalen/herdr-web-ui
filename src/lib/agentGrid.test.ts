@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Machine } from "../../shared/machines.ts";
 import type { HerdrPane, SessionSnapshot } from "../../shared/protocol.ts";
-import { DEFAULT_GRID_LAYOUT, EMPTY_GRID_FILTER, gridChoices, gridTiles, lastSegment, matchesGridFilter, parseGridLayout, placeInSlot } from "./agentGrid.ts";
+import { arrangeView, chooseInView, EMPTY_GRID_FILTER, filterView, gridChoices, gridTiles, lastSegment, matchesGridFilter, newGridView, placeInSlot, removeFromView, sanitizeGridViews } from "./agentGrid.ts";
 
 function pane(id: string, overrides: Partial<HerdrPane> = {}): HerdrPane {
   return { pane_id: id, workspace_id: "w1", tab_id: "w1:t1", terminal_id: `${id}:term`, revision: 1, focused: false, agent_status: "idle", agent: "claude", ...overrides };
@@ -68,13 +68,33 @@ describe("placeInSlot", () => {
   });
 });
 
-describe("parseGridLayout", () => {
-  it("starts empty at three by two, clamps sizes and drops unreadable tiles", () => {
-    expect(DEFAULT_GRID_LAYOUT).toEqual({ columns: 3, rows: 2, slots: [] });
-    expect(parseGridLayout(JSON.stringify({ columns: 9, rows: 0, slots: ["local:a", 3, null, ""] }))).toEqual({ columns: 6, rows: 1, slots: ["local:a", null, null, null] });
-    expect(parseGridLayout("{not json")).toEqual(DEFAULT_GRID_LAYOUT);
-    expect(parseGridLayout(null)).toEqual(DEFAULT_GRID_LAYOUT);
-    expect(parseGridLayout(JSON.stringify({ columns: 2.5 }))).toEqual(DEFAULT_GRID_LAYOUT);
+describe("saved views", () => {
+  const remote = { ...machine("box", [pane("c"), pane("d")], "connected", [{ label: "devkit-grok" }]), name: "box/work", target: { destination: "me@box", session: "work" } } as Machine;
+  const tiles = gridTiles([machine("local", [pane("a")]), remote]);
+  const clean = newGridView("v", "View 1");
+
+  it("starts a new view empty at three by two", () => {
+    expect(clean).toMatchObject({ columns: 3, rows: 2, repo: null, host: null, session: null, slots: [], excluded: [] });
+    expect(arrangeView(clean, tiles, 6)).toEqual({ keys: [null, null, null, null, null, null], hidden: 0 });
+  });
+
+  it("fills the tiles the user left empty with the filter's agents, live", () => {
+    const byHost = filterView(clean, { repo: null, host: "box", session: null });
+    expect(arrangeView(byHost, tiles, 3).keys).toEqual(["box:c", "box:d", null]);
+    expect(arrangeView(chooseInView(byHost, 0, "local:a"), tiles, 3).keys).toEqual(["local:a", "box:c", "box:d"]);
+    expect(arrangeView(byHost, tiles, 1)).toEqual({ keys: ["box:c"], hidden: 1 });
+  });
+
+  it("keeps a removed agent out until it is chosen again", () => {
+    const byHost = removeFromView(filterView(clean, { repo: null, host: "box", session: null }), 0, "box:c");
+    expect(arrangeView(byHost, tiles, 3).keys).toEqual(["box:d", null, null]);
+    expect(arrangeView(chooseInView(byHost, 2, "box:c"), tiles, 3).keys).toEqual(["box:d", null, "box:c"]);
+  });
+
+  it("reads stored views to their shape and limits", () => {
+    const stored = sanitizeGridViews([{ id: "a", name: "Devkit", columns: 9, rows: 0, repo: "devkit", slots: ["local:a", 3], excluded: ["box:c", 5] }, { id: "a" }, { name: "no id" }, "junk"]);
+    expect(stored).toEqual([{ id: "a", name: "Devkit", columns: 6, rows: 1, repo: "devkit", host: null, session: null, slots: ["local:a", null], excluded: ["box:c"] }]);
+    expect(sanitizeGridViews("junk")).toEqual([]);
   });
 });
 
