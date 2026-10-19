@@ -1,0 +1,206 @@
+/* The agent sessions page: the hub's record as sortable, filterable tables. */
+.agent-sessions {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg);
+}
+
+.agent-sessions-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--hairline) solid var(--border);
+  font-size: var(--fs-sm);
+}
+
+.agent-sessions-count { color: var(--text-dim); }
+
+.agent-sessions-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* the table scrolls inside the page, both ways, never the page itself */
+.data-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--hairline) solid var(--border);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.data-table td {
+  max-width: 24em;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-panel);
+}
+
+.data-table thead tr.data-table-filters th { top: calc(var(--chip-h) + var(--space-2)); }
+
+.data-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: var(--chip-h);
+  padding: 0;
+  background: none;
+  color: var(--text-strong);
+  border: 0;
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+}
+
+.data-table-sort svg {
+  width: var(--space-3);
+  height: var(--space-3);
+}
+
+.data-table-filters input {
+  width: 100%;
+  min-width: 6em;
+  height: var(--chip-h);
+  padding: 0 var(--space-1);
+  background: var(--bg-input);
+  color: var(--text-strong);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: max(var(--fs-input), var(--fs-xs));
+  font-weight: normal;
+}
+
+.data-table-row.is-expandable { cursor: pointer; }
+.data-table-row:hover,
+.data-table-row:focus-visible { background: var(--bg-hover); outline: 0; }
+.data-table-row[aria-expanded="true"] { background: var(--accent-tint); }
+
+.data-table-expansion td {
+  max-width: none;
+  white-space: normal;
+  background: var(--bg-panel);
+}
+
+.data-table-empty {
+  padding: var(--space-5);
+  color: var(--text-dim);
+  text-align: center;
+}
+
+.data-table a,
+.agent-session-detail a { color: var(--accent); }
+
+.agent-session-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  cursor: default;
+}
+
+.agent-session-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.agent-session-facts dt { color: var(--text-dim); }
+.agent-session-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.agent-session-resume,
+.agent-session-links,
+.agent-session-add,
+.agent-session-suggestions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.agent-session-resume code {
+  padding: var(--space-1) var(--space-2);
+  background: var(--bg);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
+}
+
+.agent-session-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-1);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+}
+
+.agent-session-action {
+  width: var(--chip-h);
+  height: var(--chip-h);
+}
+
+.agent-session-action svg,
+.agent-session-add svg {
+  width: var(--space-4);
+  height: var(--space-4);
+}
+
+.agent-session-add input {
+  flex: 1 1 18em;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  background: var(--bg-input);
+  color: var(--text-strong);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: max(var(--fs-input), var(--fs-sm));
+}
+
+.agent-session-suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agent-session-evidence,
+.agent-session-none { color: var(--text-dim); }
+
+.agent-session-error {
+  margin: 0;
+  color: var(--status-blocked);
+}

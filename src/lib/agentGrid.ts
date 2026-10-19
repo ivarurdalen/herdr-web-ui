@@ -6,7 +6,7 @@
  */
 
 import type { Machine } from "../../shared/machines.ts";
-import type { WorkspaceInfo } from "../../shared/protocol.ts";
+import { workspaceRepo, workspaceRepoHint } from "../../shared/repos.ts";
 import { sidebarAgents, type SidebarAgent } from "./sidebarAgents.ts";
 import { sidebarPinKey } from "./sidebarPins.ts";
 
@@ -100,30 +100,21 @@ export function storeGridViewId(id: string): void {
   try { localStorage.setItem(VIEW_KEY, id); } catch { /* per-browser convenience only */ }
 }
 
-/** Open unless this browser closed it: the grid is what this build is for. */
-export function loadGridOpen(): boolean {
-  try { return localStorage.getItem(OPEN_KEY) !== "0"; } catch { return true; }
-}
+/** What takes the pane area's place: the grid, the agent sessions page, or nothing (the pane itself). */
+export type Board = "grid" | "sessions" | null;
 
-export function storeGridOpen(open: boolean): void {
-  try { localStorage.setItem(OPEN_KEY, open ? "1" : "0"); } catch { /* per-browser convenience only */ }
-}
-
-function workspaceRepoHint(workspace: WorkspaceInfo): string | null {
-  const token = workspace.tokens?.["paddock_repo"];
-  if (typeof token === "string" && token.trim()) return token.trim();
-  return workspace.worktree?.repo_name || null;
-}
-
-/** The repo a workspace works on: its repo token or git worktree, else the known repo its label is prefixed with (`repo-topic`). */
-export function workspaceRepo(workspace: WorkspaceInfo, known: ReadonlySet<string>): string {
-  const hint = workspaceRepoHint(workspace);
-  if (hint !== null) return hint;
-  let best: string | null = null;
-  for (const repo of known) {
-    if ((workspace.label === repo || workspace.label.startsWith(`${repo}-`)) && repo.length > (best?.length ?? 0)) best = repo;
+/** The grid unless this browser chose otherwise: the grid is what this build is for. */
+export function loadBoard(): Board {
+  try {
+    const value = localStorage.getItem(OPEN_KEY);
+    return value === "0" ? null : value === "sessions" ? "sessions" : "grid";
+  } catch {
+    return "grid";
   }
-  return best ?? workspace.label;
+}
+
+export function storeBoard(board: Board): void {
+  try { localStorage.setItem(OPEN_KEY, board === null ? "0" : board === "grid" ? "1" : board); } catch { /* per-browser convenience only */ }
 }
 
 /** The repo of every workspace of every PC, keyed `machine:workspace`; a label prefix counts only for a repo some workspace names outright. */

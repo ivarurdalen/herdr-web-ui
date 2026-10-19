@@ -1,5 +1,5 @@
 import { type CSSProperties, type DragEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { Bell, Ellipsis, FolderOpen, LayoutGrid, Link, Menu, MessageSquare, PanelLeft, Search, SquareTerminal, X } from "lucide-react";
+import { Bell, Ellipsis, FolderOpen, History, LayoutGrid, Link, Menu, MessageSquare, PanelLeft, Search, SquareTerminal, X } from "lucide-react";
 
 import type { AgentStatus, ServerMessage, AccessRefusal, HealthAuth, HerdrPane } from "../shared/protocol.ts";
 import { ApiError, authenticate, createTab, fetchHealth, fetchBridgeHealth, fetchMachines, fetchSession, pairDevice, routeMissing, sendTestPush, signOut, splitPane, zoomPane, type HealthInfo } from "./lib/api.ts";
@@ -87,7 +87,8 @@ import { SplitDropPreview } from "./components/SplitDropPreview.tsx";
 import { CrashProbe, RegionCrash } from "./components/AppCrash.tsx";
 import { RenderBoundary } from "./components/RenderBoundary.tsx";
 import { AgentGrid } from "./components/AgentGrid.tsx";
-import { filterMachinesByRepo, gridTiles, loadGridOpen, loadSidebarRepos, repoCounts, storeGridOpen, storeSidebarRepos } from "./lib/agentGrid.ts";
+import { filterMachinesByRepo, gridTiles, loadBoard, loadSidebarRepos, repoCounts, storeBoard, storeSidebarRepos, type Board } from "./lib/agentGrid.ts";
+import { AgentSessionsPage } from "./components/AgentSessionsPage.tsx";
 import { RepoFilter } from "./components/RepoFilter.tsx";
 
 const APP_TITLE = "herdr web ui";
@@ -380,12 +381,13 @@ export function App() {
   // two tabs side by side (lib/split.ts): the other half's pane, its side, and the active slot.
   // Only drawn where the sidebar stands beside the pane; a narrower window shows the active half
   const [split, setSplitState] = useState<SplitState | null>(storedSplit);
-  // the agent grid (lib/agentGrid.ts) takes the pane area's place while it is open
-  const [gridOpen, setGridOpenState] = useState(loadGridOpen);
-  const setGridOpen = useCallback((open: boolean) => {
-    setGridOpenState(open);
-    storeGridOpen(open);
+  // the agent grid (lib/agentGrid.ts) or the agent sessions page takes the pane area's place while it is open
+  const [board, setBoardState] = useState(loadBoard);
+  const setBoard = useCallback((next: Board) => {
+    setBoardState(next);
+    storeBoard(next);
   }, []);
+  const gridOpen = board === "grid";
   // the sidebar's repo filter (components/RepoFilter.tsx) narrows only what the sidebar lists
   const [sidebarRepos, setSidebarReposState] = useState(loadSidebarRepos);
   const setSidebarRepos = useCallback((repos: string[]) => {
@@ -850,9 +852,9 @@ export function App() {
   const selectTargetRef = useRef(selectTarget); selectTargetRef.current = selectTarget;
   // a tile's Open, or a sidebar pick while the grid is open: the agent in the full view
   const openFromGrid = useCallback((machineId: string, paneId: string | null, view?: PaneView) => {
-    if (paneId !== null) setGridOpen(false);
+    if (paneId !== null) setBoard(null);
     selectTarget(machineId, paneId, view);
-  }, [selectTarget, setGridOpen]);
+  }, [selectTarget, setBoard]);
   useEffect(() => {
     // An offline PC's cached roster cannot invalidate a selection. Once connected,
     // a closed pane (including one remembered across reloads) must release its selection.
@@ -1555,14 +1557,17 @@ export function App() {
           <button type="button" className="icon-button palette-button" aria-label={t("Command palette")} title={t("Command palette (⌘⇧K)")} onClick={() => openPalette()}>
             <Search />
           </button>
-          <button type="button" className="icon-button grid-toggle" aria-label={t("Agent grid")} title={t("Agent grid")} aria-pressed={gridOpen} onClick={() => { setGridOpen(!gridOpen); setDrawerOpen(false); }}>
+          <button type="button" className="icon-button grid-toggle" aria-label={t("Agent grid")} title={t("Agent grid")} aria-pressed={gridOpen} onClick={() => { setBoard(gridOpen ? null : "grid"); setDrawerOpen(false); }}>
             <LayoutGrid />
+          </button>
+          <button type="button" className="icon-button sessions-toggle" aria-label={t("Agent sessions")} title={t("Agent sessions")} aria-pressed={board === "sessions"} onClick={() => { setBoard(board === "sessions" ? null : "sessions"); setDrawerOpen(false); }}>
+            <History />
           </button>
           <RepoFilter repos={sidebarRepoCounts} chosen={sidebarRepos} onChange={setSidebarRepos} />
         </div>
         <HeaderNote note={note} />
-        {note !== null ? null : gridOpen ? (
-          <><Brand /><span className="machine-context-name">{t("Agent grid")}</span></>
+        {note !== null ? null : board !== null ? (
+          <><Brand /><span className="machine-context-name">{t(board === "grid" ? "Agent grid" : "Agent sessions")}</span></>
         ) : selectedPane && crumb ? (
           <div className="context" title={crumb.tooltip}>
             <div className="context-title">
@@ -1584,7 +1589,7 @@ export function App() {
         ) : (
           <><Brand /><span className="machine-context-name">{selectedMachine?.name ?? selectedMachineId}</span></>
         )}
-        {selectedPane && !gridOpen && (
+        {selectedPane && board === null && (
           <div className="segmented view-switch" role="group" aria-label="Pane view">
             <button type="button" aria-pressed={view === "chat"} onClick={() => { setView("chat"); setDrawerOpen(false); }} title={t("Chat transcript (⌘⇧J)")}>
               <MessageSquare />
@@ -1597,7 +1602,7 @@ export function App() {
             </button>
           </div>
         )}
-        {selectedPane && wideScreen && !gridOpen && (
+        {selectedPane && wideScreen && board === null && (
           <>
             {/* opens Files, it is no third lens: set apart from the switch by a hairline */}
             <span className="header-divider" aria-hidden="true" />
@@ -1608,7 +1613,7 @@ export function App() {
         )}
         <div className="header-meta">
           {/* the chip speaks for the selected pane's terminal, which the grid does not mount */}
-          {!gridOpen && <ConnectionChip
+          {board === null && <ConnectionChip
             connected={connected}
             word={connWord}
             title={[connected ? null : connWord, targetHerdr ? t("herdr {version} · protocol {protocol}", { version: targetHerdr.version, protocol: targetHerdr.protocol }) : null].filter((part) => part !== null).join(" · ") || undefined}
@@ -1655,7 +1660,7 @@ export function App() {
           {/* a sidebar that cannot be drawn leaves the panes working */}
           <RenderBoundary resetKey={null} fallback={(retry) => <RegionCrash message={t("The sidebar can't be shown.")} retry={retry} />}>
             <CrashProbe region="sidebar" />
-            <MachineSidebar machines={sidebarMachines} selectedMachineId={selectedMachineId} selectedPaneId={selectedPaneId} actions={actions} onSelect={gridOpen ? openFromGrid : selectTarget} onSetup={(machine, update = false) => { setUpdateRemote(update); setMachineDialog(machine); }} onNew={(id) => { setNewSessionMachineId(id); setNewTab(null); setNewSessionOpen(true); setDrawerOpen(false); }} />
+            <MachineSidebar machines={sidebarMachines} selectedMachineId={selectedMachineId} selectedPaneId={selectedPaneId} actions={actions} onSelect={board !== null ? openFromGrid : selectTarget} onSetup={(machine, update = false) => { setUpdateRemote(update); setMachineDialog(machine); }} onNew={(id) => { setNewSessionMachineId(id); setNewTab(null); setNewSessionOpen(true); setDrawerOpen(false); }} />
           </RenderBoundary>
           <SidebarResizer width={sidebarWidth} onResize={setSidebarWidth} />
         </aside>
@@ -1675,7 +1680,7 @@ export function App() {
         {health?.lan_exposure && <LanExposureNotice host={health.lan_exposure.host} onOpen={() => { setSettingsLinkPage("devices"); setSettingsOpen(true); }} />}
         {/* the pane's tab, or two tabs side by side (lib/split.ts): a tab dragged down out of its strip,
             or a sidebar row dragged over this area, opens its pane in the half it is dropped on */}
-        {gridOpen ? <AgentGrid machines={machines} onOpen={openFromGrid} /> : <div ref={paneAreaRef} className={`pane-split${splitOn ? " is-split" : ""}`} onDragEnterCapture={paneDragOver} onDragOverCapture={paneDragOver} onDragLeave={paneDragLeave} onDropCapture={paneDrop}>
+        {board === "sessions" ? <AgentSessionsPage onOpen={openFromGrid} /> : gridOpen ? <AgentGrid machines={machines} onOpen={openFromGrid} /> : <div ref={paneAreaRef} className={`pane-split${splitOn ? " is-split" : ""}`} onDragEnterCapture={paneDragOver} onDragOverCapture={paneDragOver} onDragLeave={paneDragLeave} onDropCapture={paneDrop}>
           {(["a", "b"] as const).map((slot) => {
             // one pane: the solo slot, or a split's active half where the window is too narrow for both
             if (!splitOn && slot !== (split ? split.active : soloSlot)) return null;

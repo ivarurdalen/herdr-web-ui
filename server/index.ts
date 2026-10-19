@@ -53,7 +53,12 @@ import {
   pluginLogList,
   type PluginInvocationContext,
   sessionSnapshot,
+  worktreeList,
 } from "./herdr/client.ts";
+import { AgentSessionStore } from "./agent-sessions.ts";
+import { startAgentSessionIngest } from "./agent-session-ingest.ts";
+import { ghCli, handleAgentSessionRequest } from "./agent-session-routes.ts";
+import { linearClient } from "./linear.ts";
 import { type AlertTiming, createPushService, defaultStateDir, handlePushRequest } from "./push.ts";
 import { CLAUDE_CLEAR_INPUT_KEYS, claudeClearableDraft, claudeHeldIsGrey, claudeInputBoxContent, claudeInputDraft, hermesInputDraft, shownInputBox, claudeInputEmpty, viewportShowsLive, codexQuestionsCollapsed, handlePromptRequest, isClaudeHeld, heldCandidate, modelListWaits, noteSubmitted, parseInteractivePrompt, promptWaitEnded, claudeRestoredDraft, lastChatSubmitted } from "./prompt.ts";
 import { secretPrompt, validSecret } from "../shared/secret-prompt.ts";
@@ -79,7 +84,7 @@ import { CLIProxyRoutes } from "./cliproxy-routes.ts";
 import { UsageLoginService } from "./usage-login.ts";
 import { handleVoiceRequest, VoiceService } from "./voice.ts";
 
-import { BRIDGE_PROTOCOL } from "../shared/machines.ts";
+import { BRIDGE_PROTOCOL, LOCAL_MACHINE } from "../shared/machines.ts";
 import { bridgeIdentity, registerBridge } from "./bridge.ts";
 import { bridgeAgentNews, MachineManager } from "./machines.ts";
 import { handleMachineRequest } from "./machine-api.ts";
@@ -1121,6 +1126,27 @@ export function createServer(
     ({ type: "pane-status", pane_id: paneId, agent_status: status, ...about, ...(waits.waiting(paneId) ? { background_wait: true as const } : {}) });
   const machines = options.machines === false ? null : new MachineManager(options.stateDir ?? defaultStateDir(), push, completions, clientSnapshot);
   if (machines && options.herdrProfiles) machines.watchHerdrProfiles(options.herdrProfiles);
+  // the hub keeps a record of every agent session it sees (docs/agent-sessions.md)
+  const agentSessions = machines ? new AgentSessionStore(join(options.stateDir ?? defaultStateDir(), "agent-sessions.sqlite")) : null;
+  const linear = agentSessions ? linearClient() : null;
+  const stopAgentSessionIngest = machines && agentSessions ? startAgentSessionIngest(agentSessions, machines, async (machineId, workspace) => {
+    const workspaceId = workspace.workspace_id;
+    let listing: { source: { source_checkout_path: string }; worktrees: Array<{ path: string; branch?: string | null; is_detached: boolean }> };
+    if (machineId === LOCAL_MACHINE) listing = await worktreeList(workspaceId);
+    else {
+      const endpoint = machines.endpoint(machineId);
+      if (!endpoint) return null;
+      const response = await fetch(`${endpoint.url}/api/worktree/list?workspace_id=${encodeURIComponent(workspaceId)}`,
+        { headers: { authorization: `Bearer ${endpoint.token}` }, signal: AbortSignal.timeout(10_000) });
+      if (!response.ok) return null;
+      listing = await response.json() as typeof listing;
+    }
+    const trim = (path: string): string => path.replace(/\/+$/, "");
+    // a worktree workspace is its own checkout; any other git workspace is the checkout herdr answered from
+    const checkout = trim(workspace.worktree?.checkout_path ?? listing.source.source_checkout_path);
+    const entry = listing.worktrees.find((worktree) => trim(worktree.path) === checkout);
+    return entry && !entry.is_detached ? entry.branch ?? null : null;
+  }) : null;
   const bridgeToken = randomBytes(32).toString("hex");
 
   function broadcast(paneId: string, message: ServerMessage): void {
@@ -1937,6 +1963,10 @@ export function createServer(
       if (pathname === "/api/telemetry") return handleTelemetryRequest(request, options.telemetry);
       // what every browser of this server shares; a watching device reads it and cannot change it (above)
       if (pathname === "/api/preferences") return handlePreferencesRequest(request, preferences);
+      if (agentSessions && (pathname === "/api/agent-sessions" || pathname.startsWith("/api/agent-sessions/"))) {
+        bunServer.timeout(request, 60);
+        return handleAgentSessionRequest(request, pathname, agentSessions, ghCli, linear);
+      }
 
       if (pathname === "/api/usage") return handleUsageRequest(request, url, usage);
       if (pathname === "/api/usage/login") { bunServer.timeout(request, 30); return usageLogin.handle(request, collector.trackPane); }
@@ -2944,6 +2974,8 @@ export function createServer(
       clearInterval(waitTimer);
       plans.stop();
       machines?.stop();
+      stopAgentSessionIngest?.();
+      agentSessions?.close();
       void options.portal?.shutdown();
       registration?.close();
       for (const client of clients) killWatches(client);

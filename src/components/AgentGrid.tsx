@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { ArrowLeftRight, ArrowUp, Maximize2, Pencil, Plus, Trash2, X } from "lucide-react";
+import type { AgentSessionRecord } from "../../shared/agent-sessions.ts";
 import type { Machine } from "../../shared/machines.ts";
 import { composerMessage, composerPayload } from "../lib/compose.ts";
 import {
@@ -12,6 +13,7 @@ import { MachineContext } from "../lib/machineContext.tsx";
 import type { MachineSession } from "../lib/machineSession.ts";
 import { useMachineSessions } from "../lib/machineSessionContext.tsx";
 import { DETACHED, usePaneBranch } from "../lib/paneBranch.ts";
+import { openAgentSessionsByPane, useAgentSessions } from "../lib/agentSessions.ts";
 import { useSettings } from "../lib/settings.ts";
 import { agentTabName } from "../lib/sidebarAgents.ts";
 import { AgentMark } from "./AgentMark.tsx";
@@ -74,6 +76,8 @@ export function AgentGrid({ machines, onOpen }: Props) {
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const tiles = useMemo(() => gridTiles(machines), [machines]);
+  const { records } = useAgentSessions();
+  const recordByPane = useMemo(() => openAgentSessionsByPane(records), [records]);
   const byKey = useMemo(() => new Map(tiles.map((tile) => [tile.key, tile])), [tiles]);
   const choices = useMemo(() => gridChoices(tiles), [tiles]);
   const visible = view.columns * view.rows;
@@ -154,7 +158,7 @@ export function AgentGrid({ machines, onOpen }: Props) {
               : null;
             const remove = (): void => { if (key !== null) save(removeFromView(view, index, key)); };
             return tile
-              ? <AgentTile key={`${index}:${tile.key}`} tile={tile} named={multiple} picker={picker} onPick={() => setPicking(index)} onRemove={remove} onOpen={onOpen} />
+              ? <AgentTile key={`${index}:${tile.key}`} tile={tile} record={recordByPane.get(tile.key) ?? null} named={multiple} picker={picker} onPick={() => setPicking(index)} onRemove={remove} onOpen={onOpen} />
               : <article key={`${index}:empty`} className="agent-tile is-empty">
                 {key !== null && <p className="agent-grid-empty">{t("This agent is not available right now.")}</p>}
                 <div className="agent-tile-empty-actions">
@@ -247,6 +251,8 @@ function GridPicker({ current, tiles, placed, initial, onChoose, onClose }: Pick
 
 interface TileProps {
   tile: GridTile;
+  /** the hub's record of the agent session this pane runs, with its links */
+  record: AgentSessionRecord | null;
   /** the PC is named only beside another, as the sidebar does */
   named: boolean;
   picker: ReactNode;
@@ -255,7 +261,26 @@ interface TileProps {
   onOpen: (machineId: string, paneId: string) => void;
 }
 
-function AgentTile({ tile, named, picker, onPick, onRemove, onOpen }: TileProps) {
+/** The pull requests and Linear issues an agent session is linked to, as links out. */
+function TileLinks({ record }: { record: AgentSessionRecord }) {
+  const prs = record.pull_requests.filter((link) => link.status === "linked");
+  const issues = record.linear_issues.filter((link) => link.status === "linked");
+  if (prs.length === 0 && issues.length === 0) return null;
+  return (
+    <div className="agent-tile-links">
+      {prs.map((link) => (
+        <a key={link.url} className="agent-tile-link" href={link.url} target="_blank" rel="noreferrer" title={[link.title, link.state, link.reason].filter(Boolean).join(" · ")}>
+          {link.repo.split("/")[1]}#{link.number}
+        </a>
+      ))}
+      {issues.map((link) => link.url
+        ? <a key={link.identifier} className="agent-tile-link" href={link.url} target="_blank" rel="noreferrer" title={[link.title, link.state, link.reason].filter(Boolean).join(" · ")}>{link.identifier}</a>
+        : <span key={link.identifier} className="agent-tile-link" title={link.reason ?? undefined}>{link.identifier}</span>)}
+    </div>
+  );
+}
+
+function AgentTile({ tile, record, named, picker, onPick, onRemove, onOpen }: TileProps) {
   const t = useT();
   const { machine, entry } = tile;
   const { pane, workspace, tab, agent } = entry;
@@ -327,6 +352,7 @@ function AgentTile({ tile, named, picker, onPick, onRemove, onOpen }: TileProps)
         </div>
         {where.length > 0 && <div className="agent-tile-where">{where.join(" · ")}</div>}
         {detail.length > 0 && <div className="agent-tile-detail">{detail.join(" · ")}</div>}
+        {record && <TileLinks record={record} />}
       </header>
       <div className="agent-tile-chat">
         <MachineContext.Provider value={machine.id}>

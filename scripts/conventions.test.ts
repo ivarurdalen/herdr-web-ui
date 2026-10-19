@@ -125,6 +125,7 @@ describe("demo transport", () => {
    * (server to server, or behind a state the demo never reaches).
    */
   const DEMO_404: Record<string, string> = {
+    "/api/agent-sessions": "a 404 leaves the agent session record empty (fetchAgentSessions, src/lib/api.ts), as on a server that keeps none",
     "/api/auth": "the demo is never locked (/api/health says authenticated), so neither the token form nor sign-out runs",
     "/api/bridge": "a remote PC's bridge endpoint, asked by another server, never by the browser",
     "/api/devices": "Settings → Devices: the demo pairs no devices (listed when this guard was added)",
