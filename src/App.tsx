@@ -79,7 +79,8 @@ import { SplitDropPreview } from "./components/SplitDropPreview.tsx";
 import { CrashProbe, RegionCrash } from "./components/AppCrash.tsx";
 import { RenderBoundary } from "./components/RenderBoundary.tsx";
 import { AgentGrid } from "./components/AgentGrid.tsx";
-import { loadGridOpen, storeGridOpen } from "./lib/agentGrid.ts";
+import { filterMachinesByRepo, gridTiles, loadGridOpen, loadSidebarRepos, repoCounts, storeGridOpen, storeSidebarRepos } from "./lib/agentGrid.ts";
+import { RepoFilter } from "./components/RepoFilter.tsx";
 import { storedView, usePaneLens, usePaneLensState, usePaneViewPicks } from "./lib/usePaneLens.ts";
 import { useSplitLayout, useSplitRecheck, useSplitState } from "./lib/useSplitView.ts";
 import { useLinkLanding, useMachineGone, useNotificationTargets, useSelectedLayout, useSelectedMachine, useSelectedPane, useSelectionMark, useSelectionState, useSelectPane, useSelectTarget } from "./lib/useSelection.ts";
@@ -186,6 +187,14 @@ export function App() {
     setGridOpenState(open);
     storeGridOpen(open);
   }, []);
+  // the sidebar's repo filter (components/RepoFilter.tsx) narrows only what the sidebar lists
+  const [sidebarRepos, setSidebarReposState] = useState(loadSidebarRepos);
+  const setSidebarRepos = useCallback((repos: string[]) => {
+    setSidebarReposState(repos);
+    storeSidebarRepos(repos);
+  }, []);
+  const sidebarRepoCounts = useMemo(() => repoCounts(gridTiles(machines)), [machines]);
+  const sidebarMachines = useMemo(() => filterMachinesByRepo(machines, new Set(sidebarRepos)), [machines, sidebarRepos]);
   const { paletteOpen, paletteQuery, openPalette, setPaletteOpen } = useCommandPalette();
   const paneControls = useRef<PaneControls | null>(null);
   const [findRequest, setFindRequest] = useState<{ paneId: string | null; serial: number }>({ paneId: null, serial: 0 });
@@ -565,6 +574,8 @@ export function App() {
           <button type="button" className="icon-button grid-toggle" aria-label={t("Agent grid")} title={t("Agent grid")} aria-pressed={gridOpen} onClick={() => { setGridOpen(!gridOpen); setDrawerOpen(false); }}>
             <LayoutGrid />
           </button>
+          <RepoFilter repos={sidebarRepoCounts} chosen={sidebarRepos} onChange={setSidebarRepos} />
+          <RepoFilter repos={sidebarRepoCounts} chosen={sidebarRepos} onChange={setSidebarRepos} />
         </div>
         <HeaderNote note={note} />
         {note !== null ? null : gridOpen ? (
@@ -667,7 +678,7 @@ export function App() {
           {/* a sidebar that cannot be drawn leaves the panes working */}
           <RenderBoundary resetKey={null} fallback={(retry) => <RegionCrash message={t("The sidebar can't be shown.")} retry={retry} />}>
             <CrashProbe region="sidebar" />
-            <ReorderContext.Provider value={reorderCoordinator}><MachineSidebar machines={machines} watching={auth?.role === "watch"} drawerOpen={drawerOpen} selectedMachineId={selectedMachineId} selectedPaneId={selectedPaneId} activity={activity} actions={actions} onSelect={gridOpen ? openFromGrid : selectTarget} onSetup={(machine, update = false) => { setUpdateRemote(update); setMachineDialog(machine); }} onNew={(id) => { setNewSessionMachineId(id); setNewTab(null); setNewSessionOpen(true); setDrawerOpen(false); }} /></ReorderContext.Provider>
+            <ReorderContext.Provider value={reorderCoordinator}><MachineSidebar machines={sidebarMachines} watching={auth?.role === "watch"} drawerOpen={drawerOpen} selectedMachineId={selectedMachineId} selectedPaneId={selectedPaneId} activity={activity} actions={actions} onSelect={gridOpen ? openFromGrid : selectTarget} onSetup={(machine, update = false) => { setUpdateRemote(update); setMachineDialog(machine); }} onNew={(id) => { setNewSessionMachineId(id); setNewTab(null); setNewSessionOpen(true); setDrawerOpen(false); }} /></ReorderContext.Provider>
           </RenderBoundary>
           <SidebarResizer width={sidebarWidth} onResize={setSidebarWidth} />
         </aside>

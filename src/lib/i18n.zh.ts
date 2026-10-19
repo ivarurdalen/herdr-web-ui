@@ -279,7 +279,6 @@ const BASE: Record<string, string> = {
   "Search agents": "搜索代理",
   "All repos": "所有仓库",
   "All PCs": "所有电脑",
-  "All sessions": "所有会话",
   "No agents match.": "没有匹配的代理。",
   "Tile {n}": "磁贴 {n}",
   "Change agent": "更换代理",
@@ -292,6 +291,17 @@ const BASE: Record<string, string> = {
   "Delete view": "删除视图",
   "Delete view {name}?": "删除视图 {name}？",
   "The view leaves every device. The agents keep running.": "该视图将从所有设备移除。代理会继续运行。",
+  "herdr session": "herdr 会话",
+  "All herdr sessions": "所有 herdr 会话",
+  "A view per repo": "每个仓库一个视图",
+  "Show the {n} agents working on {repo}": "显示在 {repo} 上工作的 {n} 个代理",
+  "PC: {name}": "电脑：{name}",
+  "herdr session: {name}": "herdr 会话：{name}",
+  "Agent session: {id}": "代理会话：{id}",
+  "Filter by repo": "按仓库筛选",
+  "Filtered to {n} repos": "已筛选到 {n} 个仓库",
+  "Show only these repos": "只显示这些仓库",
+  "Show all": "全部显示",
 };
 
 /** The parts ZH is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */
