@@ -4,7 +4,7 @@ import type { Machine } from "../../shared/machines.ts";
 import { composerMessage, composerPayload } from "../lib/compose.ts";
 import {
   arrangeView, chooseInView, filterView, GRID_MAX_COLUMNS, GRID_MAX_ROWS, gridChoices, gridTiles, lastSegment, loadGridViewId, matchesGridFilter, newGridView,
-  removeFromView, storeGridViewId, viewFilter, type GridFilter, type GridTile, type GridView,
+  removeFromView, repoCounts, repoView, storeGridViewId, viewFilter, type GridFilter, type GridTile, type GridView,
 } from "../lib/agentGrid.ts";
 import { OpenFileContext } from "../lib/filePaths.ts";
 import { useT } from "../lib/i18n.ts";
@@ -27,17 +27,17 @@ interface Props {
   onOpen: (machineId: string, paneId: string) => void;
 }
 
-/** Whether a PC's connection is up. The grid opens it itself: no terminal is mounted to do so. */
-function useSessionConnected(session: MachineSession | null): boolean {
-  const [connected, setConnected] = useState(() => session?.socket.connected ?? false);
+/** Whether this browser's connection to a PC is up. The grid opens it itself: no terminal is mounted to do so. */
+function useMachineConnected(connection: MachineSession | null): boolean {
+  const [connected, setConnected] = useState(() => connection?.socket.connected ?? false);
   useEffect(() => {
-    if (session === null) return;
-    session.connect();
-    setConnected(session.socket.connected);
-    const offMessage = session.socket.on(() => setConnected(session.socket.connected));
-    const offDisconnect = session.socket.onDisconnect(() => setConnected(false));
+    if (connection === null) return;
+    connection.connect();
+    setConnected(connection.socket.connected);
+    const offMessage = connection.socket.on(() => setConnected(connection.socket.connected));
+    const offDisconnect = connection.socket.onDisconnect(() => setConnected(false));
     return () => { offMessage(); offDisconnect(); };
-  }, [session]);
+  }, [connection]);
   return connected;
 }
 
@@ -94,9 +94,14 @@ export function AgentGrid({ machines, onOpen }: Props) {
     update({ agentGridViews: saved.filter((candidate) => candidate.id !== view.id) });
     setDeleting(false);
   };
-  const setFilter = (patch: Partial<Pick<GridView, "repo" | "host" | "session">>): void => {
-    save(filterView(view, { repo: view.repo, host: view.host, session: view.session, ...patch }));
+  const setFilter = (patch: Partial<Pick<GridView, "repo" | "host" | "herdrSession">>): void => {
+    save(filterView(view, { repo: view.repo, host: view.host, herdrSession: view.herdrSession, ...patch }));
     setPicking(null);
+  };
+  const openRepo = (repo: string, count: number): void => {
+    const next = repoView(saved.length > 0 ? saved : views, repo, count, newViewId());
+    if (!saved.some((candidate) => candidate.id === next.id)) update({ agentGridViews: [...(saved.length > 0 ? saved : views), next] });
+    select(next.id);
   };
 
   return (
@@ -117,7 +122,7 @@ export function AgentGrid({ machines, onOpen }: Props) {
           </div>
           <FilterSelect label={t("Repo")} all={t("All repos")} value={view.repo} options={choices.repos} onChange={(repo) => setFilter({ repo })} />
           <FilterSelect label={t("PC")} all={t("All PCs")} value={view.host} options={choices.hosts} onChange={(host) => setFilter({ host })} />
-          <FilterSelect label={t("Session")} all={t("All sessions")} value={view.session} options={choices.sessions} onChange={(session) => setFilter({ session })} />
+          <FilterSelect label={t("herdr session")} all={t("All herdr sessions")} value={view.herdrSession} options={choices.herdrSessions} onChange={(herdrSession) => setFilter({ herdrSession })} />
           <label className="agent-grid-field agent-grid-size">
             <span>{t("Columns")}</span>
             <select value={view.columns} onChange={(event) => save({ ...view, columns: Number(event.target.value) })}>
@@ -130,9 +135,17 @@ export function AgentGrid({ machines, onOpen }: Props) {
               {COUNTS(GRID_MAX_ROWS).map((count) => <option key={count} value={count}>{count}</option>)}
             </select>
           </label>
-          <button type="button" className="btn btn-ghost" disabled={keys.every((key) => key === null) && view.slots.length === 0} onClick={() => save(filterView(view, { repo: null, host: null, session: null }))}>{t("Clear tiles")}</button>
+          <button type="button" className="btn btn-ghost" disabled={keys.every((key) => key === null) && view.slots.length === 0} onClick={() => save(filterView(view, { repo: null, host: null, herdrSession: null }))}>{t("Clear tiles")}</button>
           {hidden > 0 && <span className="agent-grid-hidden">{t("{n} more agents don't fit. Add columns or rows to show them.", { n: hidden })}</span>}
         </div>
+        <nav className="agent-grid-repos" aria-label={t("A view per repo")}>
+          {repoCounts(tiles).map(({ repo, count }) => (
+            <button key={repo} type="button" className="agent-grid-repo" aria-pressed={view.repo === repo && view.host === null && view.herdrSession === null}
+              title={t("Show the {n} agents working on {repo}", { n: count, repo })} onClick={() => openRepo(repo, count)}>
+              <span>{repo}</span><span className="agent-grid-repo-count">{count}</span>
+            </button>
+          ))}
+        </nav>
         <div className="agent-grid-tiles" style={style}>
           {keys.map((key, index) => {
             const tile = key === null ? undefined : byKey.get(key);
@@ -179,7 +192,7 @@ function GridPicker({ current, tiles, placed, initial, onChoose, onClose }: Pick
   const matches = tiles.filter((tile) => matchesGridFilter(tile, filter));
   const search = useRef<HTMLInputElement>(null);
   useEffect(() => { search.current?.focus({ preventScroll: true }); }, []);
-  const field = (name: "repo" | "host" | "session", label: string, all: string, options: string[]) => (
+  const field = (name: "repo" | "host" | "herdrSession", label: string, all: string, options: string[]) => (
     <label className="agent-pick-field">
       <span>{label}</span>
       <select value={filter[name] ?? ""} onChange={(event) => onFilter({ ...filter, [name]: event.target.value || null })}>
@@ -202,7 +215,7 @@ function GridPicker({ current, tiles, placed, initial, onChoose, onClose }: Pick
         <button type="button" className="icon-button agent-tile-action" aria-label={t("Close")} onClick={onClose}><X /></button>
         {field("repo", t("Repo"), t("All repos"), choices.repos)}
         {field("host", t("PC"), t("All PCs"), choices.hosts)}
-        {field("session", t("Session"), t("All sessions"), choices.sessions)}
+        {field("herdrSession", t("herdr session"), t("All herdr sessions"), choices.herdrSessions)}
       </div>
       {matches.length === 0
         ? <p className="agent-grid-empty">{t("No agents match.")}</p>
@@ -211,7 +224,7 @@ function GridPicker({ current, tiles, placed, initial, onChoose, onClose }: Pick
             const name = tile.entry.workspace.label;
             const title = tileTitle(tile);
             const at = placed.indexOf(tile.key);
-            const meta = [tile.host, tile.session, tile.repo !== name ? tile.repo : null, title !== name ? title : null].filter(Boolean).join(" · ");
+            const meta = [tile.host, tile.herdrSession, tile.repo !== name ? tile.repo : null, title !== name ? title : null].filter(Boolean).join(" · ");
             const mark = tile.entry.canonicalAgent ?? tile.entry.agentLabel;
             return (
               <li key={tile.key}>
@@ -246,9 +259,8 @@ function AgentTile({ tile, named, picker, onPick, onRemove, onOpen }: TileProps)
   const t = useT();
   const { machine, entry } = tile;
   const { pane, workspace, tab, agent } = entry;
-  const sessions = useMachineSessions();
-  const session = sessions?.get(machine.id) ?? null;
-  const connected = useSessionConnected(session);
+  const connection = useMachineSessions()?.get(machine.id) ?? null;
+  const connected = useMachineConnected(connection);
   const branch = usePaneBranch(machine.id, workspace.workspace_id);
   const [promptDock, setPromptDock] = useState<HTMLDivElement | null>(null);
   const [draft, setDraft] = useState("");
@@ -259,25 +271,31 @@ function AgentTile({ tile, named, picker, onPick, onRemove, onOpen }: TileProps)
   const title = tileTitle(tile);
   const mark = entry.canonicalAgent ?? entry.agentLabel;
   const status = agent?.agent_status ?? pane.agent_status;
-  const sessionRef = agent?.agent_session ?? pane.agent_session ?? null;
-  const sessionWord = sessionRef === null ? null : sessionRef.kind === "path" ? lastSegment(sessionRef.value) : sessionRef.value.slice(0, 8);
+  const agentSession = agent?.agent_session ?? pane.agent_session ?? null;
+  const agentSessionWord = agentSession === null ? null : agentSession.kind === "path" ? lastSegment(agentSession.value) : agentSession.value.slice(0, 8);
   const cwd = pane.foreground_cwd ?? pane.cwd ?? null;
   const tabName = agentTabName(tab, machine.snapshot?.tabs.filter((candidate) => candidate.workspace_id === workspace.workspace_id) ?? [], t);
-  // a remote PC's name often ends with its session already (host/session): say it once
-  const herdrSession = machine.target?.session && !machine.name.endsWith(`/${machine.target.session}`) ? machine.target.session : null;
+  // a remote PC's name often ends with its herdr session already (host/herdr-session): say it once
+  const herdrSession = tile.herdrSession && !machine.name.endsWith(`/${tile.herdrSession}`) ? tile.herdrSession : null;
   const label = workspace.label !== title && workspace.label !== tile.repo ? workspace.label : null;
   const where = [named ? machine.name : null, herdrSession, tile.repo, label, tabName !== tile.repo ? tabName : null, branch && branch !== DETACHED ? branch : null]
     .filter((part): part is string => Boolean(part));
-  const detail = [entry.agentLabel, agent?.name, sessionWord, lastSegment(cwd)].filter((part, index, all): part is string => Boolean(part) && all.indexOf(part) === index);
-  const tooltip = [title, machine.target?.destination ?? machine.name, workspace.worktree?.checkout_path ?? workspace.label, sessionRef?.value, cwd, pane.pane_id]
-    .filter(Boolean).join("\n");
+  const detail = [entry.agentLabel, agent?.name, agentSessionWord, lastSegment(cwd)].filter((part, index, all): part is string => Boolean(part) && all.indexOf(part) === index);
+  const tooltip = [
+    title,
+    t("PC: {name}", { name: machine.target?.destination ?? machine.name }),
+    tile.herdrSession ? t("herdr session: {name}", { name: tile.herdrSession }) : null,
+    workspace.worktree?.checkout_path ?? workspace.label,
+    agentSession ? t("Agent session: {id}", { id: agentSession.value }) : null,
+    cwd,
+  ].filter(Boolean).join("\n");
 
   const send = async (): Promise<void> => {
     const text = composerMessage(draft);
-    if (!text.trim() || session === null || sending) return;
+    if (!text.trim() || connection === null || sending) return;
     setSending(true);
     setFailure(null);
-    const result = await session.socket.submit(pane.pane_id, text, composerPayload(text, true));
+    const result = await connection.socket.submit(pane.pane_id, text, composerPayload(text, true));
     setSending(false);
     if (result === null) { setFailure(t("Not connected to this PC. Nothing was sent.")); return; }
     if (!result.ok) { setFailure(result.message); return; }

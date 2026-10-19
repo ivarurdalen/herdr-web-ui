@@ -2,7 +2,7 @@
  * The agent grid: saved views, each a grid of fixed columns and rows whose tiles show agents from
  * any PC. Only the chat lens is drawn, so no tile attaches a terminal or resizes a pane herdr
  * shows. A tile holds an agent the user chose, by sidebar pin key (`machine:pane`); a view with a
- * repo, PC or session filter also fills its empty tiles with every agent that matches, live.
+ * repo, PC or herdr session filter also fills its empty tiles with every agent that matches, live.
  */
 
 import type { Machine } from "../../shared/machines.ts";
@@ -17,7 +17,8 @@ export interface GridView {
   rows: number;
   repo: string | null;
   host: string | null;
-  session: string | null;
+  /** a herdr session name (a herdr server on a PC, like `private`), not an agent session */
+  herdrSession: string | null;
   /** the agent the user put in each tile, by position; null or past the end leaves the tile to the filter */
   slots: Array<string | null>;
   /** agents the user took out, so the filter does not bring them back */
@@ -29,9 +30,10 @@ export interface GridTile {
   entry: SidebarAgent;
   key: string;
   repo: string;
-  /** the PC, without the herdr session a remote PC's name carries (`host/session`) */
+  /** the PC, without the herdr session a remote PC's name carries (`host/herdr-session`) */
   host: string;
-  session: string | null;
+  /** the herdr session the agent runs in (the herdr server on that PC); null for the hub's own */
+  herdrSession: string | null;
 }
 
 /** What the agent picker narrows to; null is any. */
@@ -39,7 +41,7 @@ export interface GridFilter {
   query: string;
   repo: string | null;
   host: string | null;
-  session: string | null;
+  herdrSession: string | null;
 }
 
 export const GRID_MAX_COLUMNS = 6;
@@ -49,13 +51,13 @@ const MAX_SLOTS = GRID_MAX_COLUMNS * GRID_MAX_ROWS;
 const MAX_VIEWS = 12;
 const MAX_EXCLUDED = 48;
 const MAX_TEXT = 300;
-export const EMPTY_GRID_FILTER: GridFilter = { query: "", repo: null, host: null, session: null };
+export const EMPTY_GRID_FILTER: GridFilter = { query: "", repo: null, host: null, herdrSession: null };
 
 const VIEW_KEY = "herdr-web-ui:agent-grid-view";
 const OPEN_KEY = "herdr-web-ui:agent-grid-open";
 
 export function newGridView(id: string, name: string): GridView {
-  return { id, name, columns: 3, rows: 2, repo: null, host: null, session: null, slots: [], excluded: [] };
+  return { id, name, columns: 3, rows: 2, repo: null, host: null, herdrSession: null, slots: [], excluded: [] };
 }
 
 function clamp(value: unknown, max: number, fallback: number): number {
@@ -80,7 +82,8 @@ export function sanitizeGridViews(raw: unknown): GridView[] {
       rows: clamp(view["rows"], GRID_MAX_ROWS, 2),
       repo: text(view["repo"]),
       host: text(view["host"]),
-      session: text(view["session"]),
+      // `session` until the agent/herdr session names were told apart
+      herdrSession: text(view["herdrSession"] ?? view["session"]),
       slots: Array.isArray(view["slots"]) ? view["slots"].slice(0, MAX_SLOTS).map(text) : [],
       excluded: Array.isArray(view["excluded"]) ? view["excluded"].map(text).filter((key): key is string => key !== null).slice(-MAX_EXCLUDED) : [],
     });
@@ -123,41 +126,93 @@ export function workspaceRepo(workspace: WorkspaceInfo, known: ReadonlySet<strin
   return best ?? workspace.label;
 }
 
+/** The repo of every workspace of every PC, keyed `machine:workspace`; a label prefix counts only for a repo some workspace names outright. */
+export function workspaceRepos(machines: readonly Machine[]): Map<string, string> {
+  const workspaces = machines.flatMap((machine) => (machine.snapshot?.workspaces ?? []).map((workspace) => ({ machine, workspace })));
+  const known = new Set(workspaces.map(({ workspace }) => workspaceRepoHint(workspace)).filter((repo): repo is string => repo !== null));
+  return new Map(workspaces.map(({ machine, workspace }) => [`${machine.id}:${workspace.workspace_id}`, workspaceRepo(workspace, known)]));
+}
+
 /** Every connected PC's agents, in the sidebar's order: PC, workspace, tab, pane. */
 export function gridTiles(machines: readonly Machine[]): GridTile[] {
   const connected = machines.filter((machine) => machine.state === "connected");
-  const entries = connected.flatMap((machine) => sidebarAgents(machine.snapshot).map((entry) => ({ machine, entry })));
-  const known = new Set(entries.map(({ entry }) => workspaceRepoHint(entry.workspace)).filter((repo): repo is string => repo !== null));
-  return entries.map(({ machine, entry }) => ({
+  const repos = workspaceRepos(connected);
+  return connected.flatMap((machine) => sidebarAgents(machine.snapshot).map((entry) => ({
     machine,
     entry,
     key: sidebarPinKey(machine.id, entry.pane.pane_id),
-    repo: workspaceRepo(entry.workspace, known),
+    repo: repos.get(`${machine.id}:${entry.workspace.workspace_id}`) ?? entry.workspace.label,
     host: machine.name.split("/")[0] || machine.name,
-    session: machine.target?.session ?? null,
-  }));
+    herdrSession: machine.target?.session ?? null,
+  })));
+}
+
+/** Each repo with how many agents work on it, busiest first. */
+export function repoCounts(tiles: readonly GridTile[]): Array<{ repo: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const tile of tiles) counts.set(tile.repo, (counts.get(tile.repo) ?? 0) + 1);
+  return [...counts].map(([repo, count]) => ({ repo, count })).sort((a, b) => b.count - a.count || a.repo.localeCompare(b.repo));
+}
+
+/** The smallest grid, a little wider than tall, that holds `count` tiles. */
+export function fitGrid(count: number): { columns: number; rows: number } {
+  for (let rows = 1; rows <= GRID_MAX_ROWS; rows++) {
+    const columns = Math.ceil(count / rows);
+    if (columns <= rows + 1 && columns <= GRID_MAX_COLUMNS) return { columns: Math.max(1, columns), rows };
+  }
+  return { columns: GRID_MAX_COLUMNS, rows: GRID_MAX_ROWS };
+}
+
+/** The view that shows every agent of `repo`: the one already filtered to it alone, or a new one sized to fit. */
+export function repoView(views: readonly GridView[], repo: string, count: number, id: string): GridView {
+  const existing = views.find((view) => view.repo === repo && view.host === null && view.herdrSession === null);
+  return existing ?? { ...newGridView(id, repo), ...fitGrid(count), repo };
+}
+
+/** The PCs with only the workspaces of the chosen repos (none chosen is all); a PC left with none drops out. */
+export function filterMachinesByRepo(machines: readonly Machine[], chosen: ReadonlySet<string>): Machine[] {
+  if (chosen.size === 0) return [...machines];
+  const repos = workspaceRepos(machines);
+  return machines.flatMap((machine) => {
+    const snapshot = machine.snapshot;
+    if (!snapshot) return [];
+    const keep = new Set(snapshot.workspaces.filter((workspace) => chosen.has(repos.get(`${machine.id}:${workspace.workspace_id}`) ?? "")).map((workspace) => workspace.workspace_id));
+    if (keep.size === 0) return [];
+    const panes = snapshot.panes.filter((pane) => keep.has(pane.workspace_id));
+    const paneIds = new Set(panes.map((pane) => pane.pane_id));
+    return [{
+      ...machine,
+      snapshot: {
+        ...snapshot,
+        workspaces: snapshot.workspaces.filter((workspace) => keep.has(workspace.workspace_id)),
+        tabs: snapshot.tabs.filter((tab) => keep.has(tab.workspace_id)),
+        panes,
+        agents: snapshot.agents.filter((agent) => paneIds.has(agent.pane_id)),
+      },
+    }];
+  });
 }
 
 /** The repos, PCs and herdr sessions the tiles cover, each once and sorted, for the picker's filters. */
-export function gridChoices(tiles: readonly GridTile[]): { repos: string[]; hosts: string[]; sessions: string[] } {
+export function gridChoices(tiles: readonly GridTile[]): { repos: string[]; hosts: string[]; herdrSessions: string[] } {
   const sorted = (values: Array<string | null>): string[] => [...new Set(values.filter((value): value is string => value !== null))].sort((a, b) => a.localeCompare(b));
-  return { repos: sorted(tiles.map((tile) => tile.repo)), hosts: sorted(tiles.map((tile) => tile.host)), sessions: sorted(tiles.map((tile) => tile.session)) };
+  return { repos: sorted(tiles.map((tile) => tile.repo)), hosts: sorted(tiles.map((tile) => tile.host)), herdrSessions: sorted(tiles.map((tile) => tile.herdrSession)) };
 }
 
 export function matchesGridFilter(tile: GridTile, filter: GridFilter): boolean {
-  if ((filter.repo !== null && tile.repo !== filter.repo) || (filter.host !== null && tile.host !== filter.host) || (filter.session !== null && tile.session !== filter.session)) return false;
+  if ((filter.repo !== null && tile.repo !== filter.repo) || (filter.host !== null && tile.host !== filter.host) || (filter.herdrSession !== null && tile.herdrSession !== filter.herdrSession)) return false;
   const query = filter.query.trim().toLowerCase();
   if (!query) return true;
   const { pane, agent, workspace, agentLabel } = tile.entry;
-  return [workspace.label, pane.label, pane.title, agent?.title, agent?.name, agentLabel, tile.repo, tile.host, tile.session]
+  return [workspace.label, pane.label, pane.title, agent?.title, agent?.name, agentLabel, tile.repo, tile.host, tile.herdrSession]
     .some((text) => text?.toLowerCase().includes(query));
 }
 
 export function viewFilter(view: GridView): GridFilter {
-  return { query: "", repo: view.repo, host: view.host, session: view.session };
+  return { query: "", repo: view.repo, host: view.host, herdrSession: view.herdrSession };
 }
 
-const filtered = (view: GridView): boolean => view.repo !== null || view.host !== null || view.session !== null;
+const filtered = (view: GridView): boolean => view.repo !== null || view.host !== null || view.herdrSession !== null;
 
 /**
  * The agent in each of the view's `count` tiles: the user's choices where made, the filter's
@@ -186,7 +241,7 @@ export function removeFromView(view: GridView, index: number, key: string): Grid
 }
 
 /** A new filter starts the view over from what it matches. */
-export function filterView(view: GridView, filter: Pick<GridView, "repo" | "host" | "session">): GridView {
+export function filterView(view: GridView, filter: Pick<GridView, "repo" | "host" | "herdrSession">): GridView {
   return { ...view, ...filter, slots: [], excluded: [] };
 }
 
@@ -204,4 +259,20 @@ export function lastSegment(path: string | null | undefined): string | null {
   const trimmed = path?.trim().replace(/[\\/]+$/, "");
   if (!trimmed) return null;
   return trimmed.split(/[\\/]/).pop() || trimmed;
+}
+
+const SIDEBAR_REPOS_KEY = "herdr-web-ui:sidebar-repos";
+
+/** The repos the sidebar is narrowed to on this device; empty is every repo. */
+export function loadSidebarRepos(): string[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(SIDEBAR_REPOS_KEY) ?? "[]");
+    return Array.isArray(value) ? value.filter((repo): repo is string => typeof repo === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function storeSidebarRepos(repos: readonly string[]): void {
+  try { localStorage.setItem(SIDEBAR_REPOS_KEY, JSON.stringify(repos)); } catch { /* per-browser convenience only */ }
 }

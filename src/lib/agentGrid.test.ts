@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { Machine } from "../../shared/machines.ts";
 import type { HerdrPane, SessionSnapshot } from "../../shared/protocol.ts";
-import { arrangeView, chooseInView, EMPTY_GRID_FILTER, filterView, gridChoices, gridTiles, lastSegment, matchesGridFilter, newGridView, placeInSlot, removeFromView, sanitizeGridViews } from "./agentGrid.ts";
+import { arrangeView, chooseInView, EMPTY_GRID_FILTER, filterMachinesByRepo, filterView, fitGrid, gridChoices, gridTiles, lastSegment, matchesGridFilter, newGridView, placeInSlot, removeFromView, repoCounts, repoView, sanitizeGridViews } from "./agentGrid.ts";
 
 function pane(id: string, overrides: Partial<HerdrPane> = {}): HerdrPane {
   return { pane_id: id, workspace_id: "w1", tab_id: "w1:t1", terminal_id: `${id}:term`, revision: 1, focused: false, agent_status: "idle", agent: "claude", ...overrides };
@@ -27,7 +27,7 @@ describe("gridTiles", () => {
   });
 
   it("names the PC without its herdr session, and the session apart", () => {
-    expect(gridTiles([local, remote]).map((tile) => [tile.host, tile.session])).toEqual([["local", null], ["local", null], ["box", "work"]]);
+    expect(gridTiles([local, remote]).map((tile) => [tile.host, tile.herdrSession])).toEqual([["local", null], ["local", null], ["box", "work"]]);
   });
 
   it("takes the repo from the repo token, the worktree, then the label's known prefix", () => {
@@ -47,16 +47,43 @@ describe("gridChoices and matchesGridFilter", () => {
   const tiles = gridTiles([machine("local", [pane("a")]), remote]);
 
   it("lists each repo, PC and session once", () => {
-    expect(gridChoices(tiles)).toEqual({ repos: ["devkit-grok", "repo"], hosts: ["box", "local"], sessions: ["work"] });
+    expect(gridChoices(tiles)).toEqual({ repos: ["devkit-grok", "repo"], hosts: ["box", "local"], herdrSessions: ["work"] });
   });
 
   it("narrows by repo, PC, session and text", () => {
     const keys = (filter: Partial<typeof EMPTY_GRID_FILTER>) => tiles.filter((tile) => matchesGridFilter(tile, { ...EMPTY_GRID_FILTER, ...filter })).map((tile) => tile.key);
     expect(keys({})).toEqual(["local:a", "box:c"]);
     expect(keys({ host: "box" })).toEqual(["box:c"]);
-    expect(keys({ session: "work" })).toEqual(["box:c"]);
+    expect(keys({ herdrSession: "work" })).toEqual(["box:c"]);
     expect(keys({ repo: "repo" })).toEqual(["local:a"]);
     expect(keys({ query: "GROK" })).toEqual(["box:c"]);
+  });
+});
+
+describe("repo views", () => {
+  it("counts agents per repo, busiest first", () => {
+    const box = machine("box", [pane("a", { workspace_id: "w1" }), pane("b", { workspace_id: "w2" }), pane("c", { workspace_id: "w2" })], "connected", [{ label: "one" }, { label: "two" }]);
+    expect(repoCounts(gridTiles([box]))).toEqual([{ repo: "two", count: 2 }, { repo: "one", count: 1 }]);
+  });
+
+  it("sizes a grid to fit, a little wider than tall", () => {
+    expect([0, 1, 2, 4, 6, 7, 10, 13, 20, 30].map((count) => Object.values(fitGrid(count)).join("x"))).toEqual(["1x1", "1x1", "2x1", "2x2", "3x2", "3x3", "4x3", "4x4", "5x4", "6x4"]);
+  });
+
+  it("reuses the view filtered to the repo alone, else makes one", () => {
+    const devkit = { ...newGridView("d", "devkit"), repo: "devkit" };
+    expect(repoView([devkit], "devkit", 9, "new")).toBe(devkit);
+    expect(repoView([{ ...devkit, host: "box" }], "devkit", 7, "new")).toMatchObject({ id: "new", name: "devkit", repo: "devkit", columns: 3, rows: 3, slots: [] });
+  });
+
+  it("keeps only the chosen repos' workspaces in the sidebar, and drops a PC left empty", () => {
+    const box = machine("box", [pane("a", { workspace_id: "w1" }), pane("b", { workspace_id: "w2" })], "connected", [{ label: "one" }, { label: "two" }]);
+    const other = machine("other", [pane("c")], "connected", [{ label: "three" }]);
+    const [only, ...rest] = filterMachinesByRepo([box, other], new Set(["two"]));
+    expect(rest).toEqual([]);
+    expect(only!.snapshot!.workspaces.map((workspace) => workspace.label)).toEqual(["two"]);
+    expect(only!.snapshot!.panes.map((item) => item.pane_id)).toEqual(["b"]);
+    expect(filterMachinesByRepo([box, other], new Set())).toHaveLength(2);
   });
 });
 
@@ -74,26 +101,26 @@ describe("saved views", () => {
   const clean = newGridView("v", "View 1");
 
   it("starts a new view empty at three by two", () => {
-    expect(clean).toMatchObject({ columns: 3, rows: 2, repo: null, host: null, session: null, slots: [], excluded: [] });
+    expect(clean).toMatchObject({ columns: 3, rows: 2, repo: null, host: null, herdrSession: null, slots: [], excluded: [] });
     expect(arrangeView(clean, tiles, 6)).toEqual({ keys: [null, null, null, null, null, null], hidden: 0 });
   });
 
   it("fills the tiles the user left empty with the filter's agents, live", () => {
-    const byHost = filterView(clean, { repo: null, host: "box", session: null });
+    const byHost = filterView(clean, { repo: null, host: "box", herdrSession: null });
     expect(arrangeView(byHost, tiles, 3).keys).toEqual(["box:c", "box:d", null]);
     expect(arrangeView(chooseInView(byHost, 0, "local:a"), tiles, 3).keys).toEqual(["local:a", "box:c", "box:d"]);
     expect(arrangeView(byHost, tiles, 1)).toEqual({ keys: ["box:c"], hidden: 1 });
   });
 
   it("keeps a removed agent out until it is chosen again", () => {
-    const byHost = removeFromView(filterView(clean, { repo: null, host: "box", session: null }), 0, "box:c");
+    const byHost = removeFromView(filterView(clean, { repo: null, host: "box", herdrSession: null }), 0, "box:c");
     expect(arrangeView(byHost, tiles, 3).keys).toEqual(["box:d", null, null]);
     expect(arrangeView(chooseInView(byHost, 2, "box:c"), tiles, 3).keys).toEqual(["box:d", null, "box:c"]);
   });
 
   it("reads stored views to their shape and limits", () => {
-    const stored = sanitizeGridViews([{ id: "a", name: "Devkit", columns: 9, rows: 0, repo: "devkit", slots: ["local:a", 3], excluded: ["box:c", 5] }, { id: "a" }, { name: "no id" }, "junk"]);
-    expect(stored).toEqual([{ id: "a", name: "Devkit", columns: 6, rows: 1, repo: "devkit", host: null, session: null, slots: ["local:a", null], excluded: ["box:c"] }]);
+    const stored = sanitizeGridViews([{ id: "a", name: "Devkit", columns: 9, rows: 0, repo: "devkit", session: "work", slots: ["local:a", 3], excluded: ["box:c", 5] }, { id: "a" }, { name: "no id" }, "junk"]);
+    expect(stored).toEqual([{ id: "a", name: "Devkit", columns: 6, rows: 1, repo: "devkit", host: null, herdrSession: "work", slots: ["local:a", null], excluded: ["box:c"] }]);
     expect(sanitizeGridViews("junk")).toEqual([]);
   });
 });
