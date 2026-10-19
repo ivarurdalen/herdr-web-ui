@@ -3,7 +3,7 @@
  * and Linear issues, for the agent sessions page, the grid's tiles and the agent-sessions CLI.
  */
 import {
-  linkRequestBody, parseLinearIdentifier, parsePullRequestUrl,
+  descriptionBody, linkRequestBody, parseLinearIdentifier, parsePullRequestUrl,
   type AgentSessionRecord, type LinkSuggestion, type LinkTarget,
 } from "../shared/agent-sessions.ts";
 import type { AgentSessionStore } from "./agent-sessions.ts";
@@ -96,7 +96,7 @@ export async function handleAgentSessionRequest(request: Request, pathname: stri
     if (request.method !== "GET") return badRequest("method_not_allowed", "use GET");
     return jsonResponse({ agent_sessions: store.list() });
   }
-  const match = /^\/api\/agent-sessions\/(\d+)(\/links|\/suggestions)?$/.exec(pathname);
+  const match = /^\/api\/agent-sessions\/(\d+)(\/links|\/suggestions|\/description)?$/.exec(pathname);
   if (!match) return jsonResponse({ error: { code: "not_found", message: "no such agent session route" } }, 404);
   const id = Number(match[1]);
   const record = store.get(id);
@@ -104,6 +104,12 @@ export async function handleAgentSessionRequest(request: Request, pathname: stri
   if (match[2] === undefined) {
     if (request.method !== "GET") return badRequest("method_not_allowed", "use GET");
     return jsonResponse({ agent_session: record });
+  }
+  if (match[2] === "/description") {
+    if (request.method !== "PUT") return badRequest("method_not_allowed", "use PUT");
+    const description = descriptionBody(await readBody(request));
+    if (description === undefined) return badRequest("bad_description", "send { description } with at most three lines and 600 characters, or null to clear it");
+    return jsonResponse({ agent_session: store.describe(id, description) });
   }
   if (match[2] === "/suggestions") {
     if (request.method !== "GET") return badRequest("method_not_allowed", "use GET");

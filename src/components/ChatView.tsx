@@ -1,3 +1,4 @@
+import { AgentSessionStrip } from "./AgentSessionStrip.tsx";
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -164,6 +165,8 @@ export interface ChatViewProps {
   onPromptAnswered?: (toMessageBox: boolean) => void;
   /** the pane's own name, as App's header shows it: the log is named by it, never by the pane id */
   title?: string | null;
+  /** above the transcript, what the hub's record knows of this agent session (AgentSessionStrip) */
+  sessionStrip?: boolean;
 }
 
 interface ChatState {
@@ -804,7 +807,7 @@ function TerminalFallback({ paneId, visible }: { paneId: string; visible: boolea
 }
 
 // the app re-renders on every pane-status and poll; an unchanged transcript sits those out
-export const ChatView = memo(function ChatView({ paneId, active = true, visible: paneVisible = true, pageScroll, refreshKey, invalidationKey = 0, onConversationWatch, conversationPushes = false, onTerminalOutput, sentKey = 0, connected, ended, agent, agentStatus, onMetadata, onRead, greeted = false, onPrompt, onSuggestion, onRestored, promptRefreshKey = 0, pendingAnswer = null, onPendingAnswerDone, promptDock = null, onPromptAnswered, title = null }: ChatViewProps) {
+export const ChatView = memo(function ChatView({ paneId, active = true, visible: paneVisible = true, pageScroll, refreshKey, invalidationKey = 0, onConversationWatch, conversationPushes = false, onTerminalOutput, sentKey = 0, connected, ended, agent, agentStatus, onMetadata, onRead, greeted = false, onPrompt, onSuggestion, onRestored, promptRefreshKey = 0, pendingAnswer = null, onPendingAnswerDone, promptDock = null, onPromptAnswered, title = null, sessionStrip = false }: ChatViewProps) {
   const t = useT();
   const { fetchPaneConversation, peekPaneConversation, fetchPanePromptState, fetchPaneTranscript } = useMachineApi();
   const { settings } = useSettings();
@@ -1506,6 +1509,7 @@ export const ChatView = memo(function ChatView({ paneId, active = true, visible:
     : away && <button type="button" className="btn chat-new-messages chat-virtual-jump is-icon" aria-label={t("Jump to latest")} title={t("Jump to latest")} onClick={scrollToBottom}><ArrowDown aria-hidden="true" /></button>;
   return <ChatPaneContext.Provider value={paneId}><ChatHistoryContext.Provider value={historyId ?? ""}><ImageViewerContext.Provider value={openViewer}>
     <div className="chat-frame">
+    {sessionStrip && <AgentSessionStrip paneId={paneId} />}
     <div className="chat-frame-body">
     {state.source === "conversation" ? ChatTimeline === null
       // its chunk is still loading: no turn is read until it arrives, so this is the loading state

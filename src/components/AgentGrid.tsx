@@ -17,6 +17,7 @@ import { openAgentSessionsByPane, useAgentSessions } from "../lib/agentSessions.
 import { useSettings } from "../lib/settings.ts";
 import { agentTabName } from "../lib/sidebarAgents.ts";
 import { AgentMark } from "./AgentMark.tsx";
+import { AgentSessionLinks } from "./AgentSessionLinks.tsx";
 import { ChatView } from "./ChatView.tsx";
 import { ConfirmDialog } from "./ConfirmDialog.tsx";
 import { RenderBoundary } from "./RenderBoundary.tsx";
@@ -263,19 +264,13 @@ interface TileProps {
 
 /** The pull requests and Linear issues an agent session is linked to, as links out. */
 function TileLinks({ record }: { record: AgentSessionRecord }) {
-  const prs = record.pull_requests.filter((link) => link.status === "linked");
-  const issues = record.linear_issues.filter((link) => link.status === "linked");
-  if (prs.length === 0 && issues.length === 0) return null;
+  const prs = record.pull_requests.some((link) => link.status === "linked");
+  const issues = record.linear_issues.some((link) => link.status === "linked");
+  if (!prs && !issues) return null;
   return (
     <div className="agent-tile-links">
-      {prs.map((link) => (
-        <a key={link.url} className="agent-tile-link" href={link.url} target="_blank" rel="noreferrer" title={[link.title, link.state, link.reason].filter(Boolean).join(" · ")}>
-          {link.repo.split("/")[1]}#{link.number}
-        </a>
-      ))}
-      {issues.map((link) => link.url
-        ? <a key={link.identifier} className="agent-tile-link" href={link.url} target="_blank" rel="noreferrer" title={[link.title, link.state, link.reason].filter(Boolean).join(" · ")}>{link.identifier}</a>
-        : <span key={link.identifier} className="agent-tile-link" title={link.reason ?? undefined}>{link.identifier}</span>)}
+      {prs && <AgentSessionLinks record={record} kind="pull_request" />}
+      {issues && <AgentSessionLinks record={record} kind="linear_issue" />}
     </div>
   );
 }

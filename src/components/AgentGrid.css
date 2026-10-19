@@ -208,18 +208,10 @@
   margin-block-start: var(--space-1);
 }
 
-.agent-tile-link {
-  padding: 0 var(--space-1);
-  border: var(--hairline) solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--accent);
+.agent-tile-links .agent-session-link-list {
   font-family: var(--font-mono);
   font-size: var(--fs-2xs);
-  text-decoration: none;
 }
-
-a.agent-tile-link:hover { background: var(--accent-tint); }
 
 /* ChatView fills a positioned box (ChatView.css) */
 .agent-tile-chat {

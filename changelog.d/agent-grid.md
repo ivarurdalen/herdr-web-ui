@@ -10,8 +10,11 @@
 - Sidebar repo filter: a funnel beside the agent grid button narrows the sidebar to the chosen
   repos' workspaces and agents, on this device.
 - Agent sessions: the hub keeps a SQLite record of every agent session it sees (where it ran, its
-  agent session id, repo, branch, folder, and when it was first seen, last seen and ended), linked
-  many to many to GitHub pull requests and Linear issues. An Agent sessions page lists them in
-  sortable, filterable tables, with the resume command, suggested links and links made or removed
-  by hand; the grid's tiles show each agent session's links. The link-agent-sessions skill lets an
-  agent link them through /api/agent-sessions. Transcripts are not stored.
+  agent session id, repo, branch, folder, and when it was first seen, last seen and ended), a
+  short description an agent writes of each, with when it was written, and links many to many to
+  GitHub pull requests and Linear issues. An Agent sessions page lists them in one sortable,
+  filterable table: the title opens the chat, the description and the linked pull requests and
+  issues show as links, and a column picker shows the rest. A row opens to the resume command,
+  suggested links and links made or removed by hand. The chat view and the grid's tiles show the
+  agent session's links, and the chat view its description. The agent-sessions skill lets an agent
+  describe and link them through /api/agent-sessions. Transcripts are not stored.

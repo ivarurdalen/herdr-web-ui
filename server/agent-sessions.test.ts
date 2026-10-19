@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { linkRequestBody, resumeCommand } from "../shared/agent-sessions.ts";
+import { Database } from "bun:sqlite";
+import { descriptionBody, linkRequestBody, resumeCommand } from "../shared/agent-sessions.ts";
 import type { Machine } from "../shared/machines.ts";
 import { machineSightings, startAgentSessionIngest } from "./agent-session-ingest.ts";
 import { handleAgentSessionRequest, suggestLinks } from "./agent-session-routes.ts";
@@ -53,6 +54,30 @@ describe("AgentSessionStore", () => {
     expect(store.get(second!)!.pull_requests[0]).toMatchObject({ url: PR, title: "Fix" });
     expect(store.unlink(first!, { kind: "linear_issue", identifier: "ENG-2" })!.linear_issues[1]).toMatchObject({ identifier: "ENG-2", status: "rejected", source: "manual" });
     expect(store.link(999, { kind: "linear_issue", identifier: "ENG-1" })).toBeNull();
+  });
+
+  it("keeps a short description with when it was written, and refuses a long one", () => {
+    const store = new AgentSessionStore(":memory:");
+    store.observe("box", [sighting("a")], at(0));
+    const id = store.list()[0]!.id;
+    expect(store.describe(id, "- **Grok:** install the CLI", at(3))).toMatchObject({ description: "- **Grok:** install the CLI", description_updated_at: at(3).toISOString() });
+    expect(store.describe(id, null)).toMatchObject({ description: null, description_updated_at: null });
+    expect(descriptionBody({ description: "- one\n\n- two\n- three  " })).toBe("- one\n- two\n- three");
+    expect(descriptionBody({ description: "1\n2\n3\n4" })).toBeUndefined();
+    expect(descriptionBody({ description: "  " })).toBeNull();
+  });
+
+  it("adds the description to a record made before it", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "agent-sessions-")), "agent-sessions.sqlite");
+    const first = new AgentSessionStore(path);
+    first.observe("box", [sighting("a")], at(0));
+    first.close();
+    const raw = new Database(path);
+    raw.exec("ALTER TABLE agent_sessions DROP COLUMN description; ALTER TABLE agent_sessions DROP COLUMN description_updated_at; PRAGMA user_version = 1;");
+    raw.close();
+    const again = new AgentSessionStore(path);
+    expect(again.describe(again.list()[0]!.id, "- **x:** y", at(1))!.description).toBe("- **x:** y");
+    again.close();
   });
 
   it("keeps its record across a restart", () => {
