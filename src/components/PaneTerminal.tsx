@@ -2911,6 +2911,7 @@ export function PaneTerminal({
           <ChatView
             key={paneId}
             paneId={paneId}
+            sessionStrip
             active={active}
             visible={presented && shown}
             pageScroll={pageScroll}

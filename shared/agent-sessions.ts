@@ -7,6 +7,7 @@
  *  GET    /api/agent-sessions/:id                     -> { agent_session: AgentSessionRecord }
  *  POST   /api/agent-sessions/:id/links   LinkRequest -> { agent_session: AgentSessionRecord }
  *  DELETE /api/agent-sessions/:id/links   LinkTarget  -> { agent_session: AgentSessionRecord }
+ *  PUT    /api/agent-sessions/:id/description { description: string | null } -> { agent_session: AgentSessionRecord }
  */
 
 export type LinkSource = "agent" | "manual" | "rule";
@@ -56,6 +57,10 @@ export interface AgentSessionRecord {
   branch: string | null;
   cwd: string | null;
   title: string | null;
+  /** what the agent session is about, at most three Markdown bullets an agent wrote from its transcript */
+  description: string | null;
+  /** when the description was last written */
+  description_updated_at: string | null;
   first_seen_at: string;
   last_seen_at: string;
   /** when it left its pane while the PC was connected; null while it runs */
@@ -127,3 +132,18 @@ export type LinkSuggestion = (
   | { kind: "pull_request"; url: string; title: string | null; state: string | null }
   | { kind: "linear_issue"; identifier: string; url: string | null; title: string | null; state: string | null }
 ) & { evidence: string };
+
+export const DESCRIPTION_MAX_LINES = 3;
+export const DESCRIPTION_MAX_CHARS = 600;
+
+/** A description to store: trimmed, at most three lines; null clears it; undefined when it breaks the limits. */
+export function descriptionBody(raw: unknown): string | null | undefined {
+  if (typeof raw !== "object" || raw === null) return undefined;
+  const value = (raw as Record<string, unknown>)["description"];
+  if (value === null) return null;
+  if (typeof value !== "string") return undefined;
+  const lines = value.split("\n").map((line) => line.trimEnd()).filter((line) => line.trim() !== "");
+  if (lines.length === 0) return null;
+  const text = lines.join("\n");
+  return lines.length > DESCRIPTION_MAX_LINES || text.length > DESCRIPTION_MAX_CHARS ? undefined : text;
+}

@@ -102,12 +102,15 @@ export class AgentSessionStore {
     this.db = new Database(path, { create: true, strict: true });
     this.db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
     const version = (this.db.query("PRAGMA user_version").get() as { user_version: number }).user_version;
-    if (version === 0) {
-      this.db.transaction(() => {
-        for (const statement of SCHEMA) this.db.exec(statement);
-        this.db.exec("PRAGMA user_version = 1");
-      })();
-    }
+    this.db.transaction(() => {
+      if (version < 1) for (const statement of SCHEMA) this.db.exec(statement);
+      // version 2: the short summary an agent writes of the agent session
+      if (version < 2) {
+        this.db.exec("ALTER TABLE agent_sessions ADD COLUMN description TEXT");
+        this.db.exec("ALTER TABLE agent_sessions ADD COLUMN description_updated_at TEXT");
+      }
+      this.db.exec("PRAGMA user_version = 2");
+    })();
   }
 
   close(): void { this.db.close(); }
@@ -151,6 +154,13 @@ export class AgentSessionStore {
     const row = this.db.query("SELECT * FROM agent_sessions WHERE id = $id").get({ id }) as Row | null;
     if (row === null) return null;
     return this.record(row, this.pullRequestLinks(id).get(id) ?? [], this.linearIssueLinks(id).get(id) ?? []);
+  }
+
+  /** Sets the agent session's description (null clears it) and when it was written. */
+  describe(id: number, description: string | null, now: Date = new Date()): AgentSessionRecord | null {
+    this.db.query("UPDATE agent_sessions SET description = $description, description_updated_at = $at WHERE id = $id")
+      .run({ id, description, at: description === null ? null : now.toISOString() });
+    return this.get(id);
   }
 
   /** Links an agent session; a link made again takes the new source and reason and counts as linked. */
