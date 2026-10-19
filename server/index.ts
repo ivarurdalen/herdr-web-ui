@@ -31,7 +31,12 @@ import { handleFileRequest } from "./file-routes.ts";
 import {
   herdrSocketPath,
   ping,
+  worktreeList,
 } from "./herdr/client.ts";
+import { AgentSessionStore } from "./agent-sessions.ts";
+import { startAgentSessionIngest } from "./agent-session-ingest.ts";
+import { ghCli, handleAgentSessionRequest } from "./agent-session-routes.ts";
+import { linearClient } from "./linear.ts";
 import { type AlertTiming, defaultStateDir, handlePushRequest } from "./push.ts";
 import { moveLegacyStateDir } from "./update-state.ts";
 import { handlePromptRequest, OpenCodePromptState } from "./prompt.ts";
@@ -46,7 +51,7 @@ import { CLIProxyRoutes } from "./cliproxy-routes.ts";
 import { UsageLoginService } from "./usage-login.ts";
 import { handleVoiceRequest, VoiceService } from "./voice.ts";
 
-import { BRIDGE_PROTOCOL } from "../shared/machines.ts";
+import { BRIDGE_PROTOCOL, LOCAL_MACHINE } from "../shared/machines.ts";
 import { bridgeIdentity, registerBridge } from "./bridge.ts";
 import { handleMachineRequest, nonCanonicalPath, slowMachinePath } from "./machine-api.ts";
 import { handleSessionHistoryRequest, handleSessionResumeRequest, SESSION_HISTORY_PATH, SESSION_RESUME_PATH } from "./session-history-routes.ts";
@@ -228,6 +233,27 @@ export function createServer(
   // started after createCore's Node probe (server/pty/sidecar.ts), which can hold the thread up to 3 s: that wait
   // would count against the read's own 2.5 s limit, and a read cut short leaves the owner unknown for 5 minutes
   identityOf(false, null);
+  // the hub keeps a record of every agent session it sees (docs/agent-sessions.md)
+  const agentSessions = machines ? new AgentSessionStore(join(options.stateDir ?? defaultStateDir(), "agent-sessions.sqlite")) : null;
+  const linear = agentSessions ? linearClient() : null;
+  const stopAgentSessionIngest = machines && agentSessions ? startAgentSessionIngest(agentSessions, machines, async (machineId, workspace) => {
+    const workspaceId = workspace.workspace_id;
+    let listing: { source: { source_checkout_path: string }; worktrees: Array<{ path: string; branch?: string | null; is_detached: boolean }> };
+    if (machineId === LOCAL_MACHINE) listing = await worktreeList(workspaceId);
+    else {
+      const endpoint = machines.endpoint(machineId);
+      if (!endpoint) return null;
+      const response = await fetch(`${endpoint.url}/api/worktree/list?workspace_id=${encodeURIComponent(workspaceId)}`,
+        { headers: { authorization: `Bearer ${endpoint.token}` }, signal: AbortSignal.timeout(10_000) });
+      if (!response.ok) return null;
+      listing = await response.json() as typeof listing;
+    }
+    const trim = (path: string): string => path.replace(/\/+$/, "");
+    // a worktree workspace is its own checkout; any other git workspace is the checkout herdr answered from
+    const checkout = trim(workspace.worktree?.checkout_path ?? listing.source.source_checkout_path);
+    const entry = listing.worktrees.find((worktree) => trim(worktree.path) === checkout);
+    return entry && !entry.is_detached ? entry.branch ?? null : null;
+  }) : null;
   const bridgeToken = randomBytes(32).toString("hex");
 
   type PortalStartup = { ok: true } | { ok: false; error: unknown };
@@ -428,6 +454,11 @@ export function createServer(
       if (pathname === "/api/preferences") { setRequestRoute(pathname); return handlePreferencesRequest(request, preferences); }
       // the finishes read in some browser of this server; a watching device reads them and cannot add to them (above)
       if (pathname === "/api/seen") { setRequestRoute(pathname); return handleSeenRequest(request, seen); }
+      if (agentSessions && (pathname === "/api/agent-sessions" || pathname.startsWith("/api/agent-sessions/"))) {
+        setRequestRoute("/api/agent-sessions");
+        bunServer.timeout(request, 60);
+        return handleAgentSessionRequest(request, pathname, agentSessions, ghCli, linear);
+      }
 
       if (pathname === "/api/usage") { setRequestRoute(pathname); return handleUsageRequest(request, url, usage); }
       if (pathname === "/api/usage/login") { setRequestRoute(pathname); bunServer.timeout(request, 30); return usageLogin.handle(request, collector.trackPane); }
@@ -592,6 +623,8 @@ export function createServer(
         void options.portal?.shutdown();
         registration?.close();
         closeCodexDaemonSources();
+        stopAgentSessionIngest?.();
+        agentSessions?.close();
       });
       void shellAgents.stop();
       server.stop(true);
