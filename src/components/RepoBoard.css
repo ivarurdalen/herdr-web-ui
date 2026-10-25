@@ -175,3 +175,52 @@
 .repo-board [data-status="idle"] { --repo-status: var(--status-idle); }
 
 .repo-card-bar > [data-status] { background: var(--repo-status); }
+
+/* active and inactive agents at a glance; agents that need input stand out */
+.repo-card-activity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  color: var(--text-dim);
+}
+
+.repo-card-activity .is-active { color: var(--text-strong); font-weight: 600; }
+.repo-card-activity .is-zero { opacity: 0.55; }
+
+.repo-card-alert {
+  margin-inline-start: auto;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--status-blocked-tint);
+  color: var(--status-blocked);
+  font-weight: 600;
+}
+
+.repo-card-agents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.repo-agent {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.repo-agent-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-agent-status { flex: none; color: var(--text-dim); font-size: var(--fs-xs); }
+.repo-agent[data-status="blocked"] .repo-agent-status { color: var(--status-blocked); font-weight: 600; }
+.repo-agent.is-inactive .repo-agent-name { color: var(--text-dim); }
+
+.repo-agent-more { color: var(--text-dim); font-size: var(--fs-xs); }

@@ -36,6 +36,16 @@ function record(machineId: string, paneId: string, links: { prs?: string[]; issu
 }
 
 describe("repoStats", () => {
+  it("splits agents into active and inactive, and lists them with the ones in a turn first", () => {
+    const box = machine("box", [["w1", "r", [
+      pane("idle", "w1"), pane("done", "w1", { agent_status: "done" }), pane("bg", "w1", { agent_status: "done", background_wait: true }),
+      pane("ask", "w1", { agent_status: "blocked" }), pane("run", "w1", { agent_status: "working" }),
+    ]]]);
+    const [stats] = repoStats(gridTiles([box]), []);
+    expect([stats!.active, stats!.inactive]).toEqual([3, 2]);
+    expect(stats!.agents.map(({ tile, status }) => `${tile.entry.pane.pane_id}:${status}`)).toEqual(["ask:blocked", "run:working", "bg:waiting", "done:done", "idle:idle"]);
+  });
+
   it("counts a status per agent, summing to the total, and counts distinct workspaces across PCs", () => {
     // the same workspace id on two PCs is two workspaces
     const a = machine("a", [["w1", "r", [pane("p1", "w1", { agent_status: "working" }), pane("p2", "w1", { agent_status: "blocked" })]]]);

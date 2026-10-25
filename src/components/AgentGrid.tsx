@@ -46,7 +46,7 @@ function useMachineConnected(connection: MachineSession | null): boolean {
 
 const COUNTS = (max: number) => Array.from({ length: max }, (_, index) => index + 1);
 
-function tileTitle({ entry }: GridTile): string {
+export function tileTitle({ entry }: GridTile): string {
   return entry.pane.label?.trim() || entry.agent?.title?.trim() || entry.pane.title?.trim() || displayPaneTitle(entry.pane);
 }
 

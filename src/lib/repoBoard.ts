@@ -8,10 +8,23 @@ import { paneStatus, type KnownStatus } from "./status.ts";
 /** The statuses in the order a card lists them: what needs a person first. */
 export const REPO_STATUSES: readonly KnownStatus[] = ["blocked", "working", "waiting", "done", "idle", "unknown"];
 
+/** The statuses of an agent that is in a turn: asking for input, at work, or waiting on its turn's background work. */
+const ACTIVE: ReadonlySet<KnownStatus> = new Set(["blocked", "working", "waiting"]);
+
+export interface RepoAgent {
+  tile: GridTile;
+  status: KnownStatus;
+}
+
 export interface RepoStats {
   repo: string;
   total: number;
   counts: Record<KnownStatus, number>;
+  /** agents in a turn (blocked, working, waiting); the rest are inactive */
+  active: number;
+  inactive: number;
+  /** the repo's agents in the card's status order, sidebar order within a status */
+  agents: RepoAgent[];
   /** distinct PCs */
   hosts: number;
   /** distinct workspaces: the same workspace id on two PCs is two */
@@ -28,12 +41,15 @@ export function repoStats(tiles: readonly GridTile[], records: readonly AgentSes
     let group = groups.get(tile.repo);
     if (!group) {
       const counts = Object.fromEntries(REPO_STATUSES.map((status) => [status, 0])) as Record<KnownStatus, number>;
-      group = { stats: { repo: tile.repo, total: 0, counts, hosts: 0, workspaces: 0, pullRequests: 0, issues: 0 }, hosts: new Set(), workspaces: new Set(), pullRequests: new Set(), issues: new Set() };
+      group = { stats: { repo: tile.repo, total: 0, counts, active: 0, inactive: 0, agents: [], hosts: 0, workspaces: 0, pullRequests: 0, issues: 0 }, hosts: new Set(), workspaces: new Set(), pullRequests: new Set(), issues: new Set() };
       groups.set(tile.repo, group);
     }
     const { pane, agent } = tile.entry;
+    const status = paneStatus({ agent_status: agent?.agent_status ?? pane.agent_status, background_wait: pane.background_wait });
     group.stats.total += 1;
-    group.stats.counts[paneStatus({ agent_status: agent?.agent_status ?? pane.agent_status, background_wait: pane.background_wait })] += 1;
+    group.stats.counts[status] += 1;
+    group.stats[ACTIVE.has(status) ? "active" : "inactive"] += 1;
+    group.stats.agents.push({ tile, status });
     group.hosts.add(tile.host);
     group.workspaces.add(`${tile.machine.id}:${tile.entry.workspace.workspace_id}`);
     const record = recordByPane.get(tile.key);
@@ -41,7 +57,11 @@ export function repoStats(tiles: readonly GridTile[], records: readonly AgentSes
     for (const link of record?.linear_issues ?? []) if (link.status === "linked") group.issues.add(link.identifier);
   }
   return [...groups.values()]
-    .map(({ stats, hosts, workspaces, pullRequests, issues }) => ({ ...stats, hosts: hosts.size, workspaces: workspaces.size, pullRequests: pullRequests.size, issues: issues.size }))
+    .map(({ stats, hosts, workspaces, pullRequests, issues }) => ({
+      ...stats,
+      agents: stats.agents.sort((a, b) => REPO_STATUSES.indexOf(a.status) - REPO_STATUSES.indexOf(b.status)),
+      hosts: hosts.size, workspaces: workspaces.size, pullRequests: pullRequests.size, issues: issues.size,
+    }))
     .sort((a, b) => b.counts.blocked - a.counts.blocked || b.counts.working - a.counts.working || a.repo.localeCompare(b.repo));
 }
 
