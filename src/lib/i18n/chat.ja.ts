@@ -129,7 +129,6 @@ export const CHAT_JA: Record<string, string> = {
   "Background tasks": "バックグラウンドタスク",
   "Couldn't load the background tasks": "バックグラウンドタスクを読み込めませんでした",
   "No background tasks to show yet": "表示できるバックグラウンドタスクはまだありません",
-  "Running": "実行中",
   "{n} recently ended": "最近終了 {n} 件",
   "Nothing running right now": "現在実行中のものはありません",
   "{done} of {total} done": "{total} 件中 {done} 件完了",

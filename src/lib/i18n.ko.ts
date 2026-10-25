@@ -259,6 +259,11 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "PC 바꾸기",
   "Selected": "선택됨",
+  "Remove": "제거",
+  "Running": "실행 중",
+  "Send": "보내기",
+  "Rename": "이름 바꾸기",
+  "Agent": "에이전트",
   // agent grid
   "Agent grid": "에이전트 그리드",
   "Columns": "열",

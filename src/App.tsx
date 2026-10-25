@@ -79,7 +79,7 @@ import { SplitDropPreview } from "./components/SplitDropPreview.tsx";
 import { CrashProbe, RegionCrash } from "./components/AppCrash.tsx";
 import { RenderBoundary } from "./components/RenderBoundary.tsx";
 import { AgentGrid } from "./components/AgentGrid.tsx";
-import { filterMachinesByRepo, gridTiles, loadBoard, loadSidebarRepos, repoCounts, storeBoard, storeSidebarRepos, type Board } from "./lib/agentGrid.ts";
+import { useAgentBoard, useSidebarRepos } from "./lib/useAgentBoard.ts";
 import { AgentSessionsPage } from "./components/AgentSessionsPage.tsx";
 import { RepoFilter } from "./components/RepoFilter.tsx";
 import { storedView, usePaneLens, usePaneLensState, usePaneViewPicks } from "./lib/usePaneLens.ts";
@@ -182,21 +182,6 @@ export function App() {
   const { selectionRef } = useSelectionMark({ selectedMachineId, selectedPaneId });
   const { lens, setLens, viewPicks, setViewPicks } = usePaneLensState();
   const { split, setSplit, soloSlot, endSplit, splitRef, splitShownRef, lastKeyAtRef, paneDragging, setPaneDragging, dropAt, dropAtRef, showDropTarget, clearDropPreview, paneAreaRef, tabDrag } = useSplitState();
-  // the agent grid (lib/agentGrid.ts) or the agent sessions page takes the pane area's place while it is open
-  const [board, setBoardState] = useState(loadBoard);
-  const setBoard = useCallback((next: Board) => {
-    setBoardState(next);
-    storeBoard(next);
-  }, []);
-  const gridOpen = board === "grid";
-  // the sidebar's repo filter (components/RepoFilter.tsx) narrows only what the sidebar lists
-  const [sidebarRepos, setSidebarReposState] = useState(loadSidebarRepos);
-  const setSidebarRepos = useCallback((repos: string[]) => {
-    setSidebarReposState(repos);
-    storeSidebarRepos(repos);
-  }, []);
-  const sidebarRepoCounts = useMemo(() => repoCounts(gridTiles(machines)), [machines]);
-  const sidebarMachines = useMemo(() => filterMachinesByRepo(machines, new Set(sidebarRepos)), [machines, sidebarRepos]);
   const { paletteOpen, paletteQuery, openPalette, setPaletteOpen } = useCommandPalette();
   const paneControls = useRef<PaneControls | null>(null);
   const [findRequest, setFindRequest] = useState<{ paneId: string | null; serial: number }>({ paneId: null, serial: 0 });
@@ -276,11 +261,9 @@ export function App() {
   }, [loadHealth, t]);
 
   const { selectedMachineRef, selectTarget, selectTargetRef } = useSelectTarget({ selectedMachineId, setConnected, setConnectedBefore, setSelectedMachineId, setSelectedPaneId, setAutoSelected, setDrawerOpen, setOutputStopped, setNotificationViewTarget, setTerminalPeek, pendingLink, pendingFile, setLinkLanded, selectionHint, selectionSince, rosterSeq, snapshot, selectedMachine, selectedPaneId, setHeaderNote, linkTick });
-  // a tile's Open, or a sidebar pick while the grid is open: the agent in the full view
-  const openFromGrid = useCallback((machineId: string, paneId: string | null, view?: PaneView) => {
-    if (paneId !== null) setBoard(null);
-    selectTarget(machineId, paneId, view);
-  }, [selectTarget, setBoard]);
+  const { board, setBoard, openFromGrid } = useAgentBoard(selectTarget);
+  const gridOpen = board === "grid";
+  const { sidebarRepos, setSidebarRepos, sidebarRepoCounts, sidebarMachines } = useSidebarRepos(machines);
 
   const { selectPane } = useSelectPane({ pendingLink, pendingFile, setLinkLanded, selectionHint, setSelectedPaneId, setNotificationViewTarget, setTerminalPeek, setAutoSelected, setDrawerOpen });
 

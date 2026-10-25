@@ -90,7 +90,6 @@ export const COMPOSER_ZH: Record<string, string> = {
   "{name} could not be attached": "无法附加 {name}",
   "Not sent: Claude Code's rewind dialog is open in the terminal. Finish or close it there (Esc), then send this message.": "未发送：终端中 Claude Code 的回退对话框处于打开状态。请先在那里完成或关闭它（Esc），再发送此消息。",
   "Not updated: the question on screen may have changed.": "未更新：屏幕上的问题可能已经变化。",
-  "Send": "发送",
   "The dictation does not fit in the box": "听写内容超出输入框上限，未插入",
   "No speech was heard": "没有听到语音",
   "Add an OpenAI API key in Settings > Voice input": "请在设置 > 语音输入中添加 OpenAI API 密钥",

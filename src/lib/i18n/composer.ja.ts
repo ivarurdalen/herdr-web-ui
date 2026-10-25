@@ -90,7 +90,6 @@ export const COMPOSER_JA: Record<string, string> = {
   "{name} could not be attached": "{name} を添付できませんでした",
   "Not sent: Claude Code's rewind dialog is open in the terminal. Finish or close it there (Esc), then send this message.": "未送信: ターミナルで Claude Code の巻き戻しダイアログが開いています。そこで完了するか閉じて (Esc) から、このメッセージを送信してください。",
   "Not updated: the question on screen may have changed.": "更新されていません：画面の質問が変わっている可能性があります。",
-  "Send": "送信",
   "The dictation does not fit in the box": "音声入力の内容が入力欄の上限を超えるため挿入しませんでした",
   "No speech was heard": "音声が聞こえませんでした",
   "Add an OpenAI API key in Settings > Voice input": "設定 > 音声入力で OpenAI API キーを追加してください",

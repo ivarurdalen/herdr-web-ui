@@ -90,7 +90,6 @@ export const COMPOSER_KO: Record<string, string> = {
   "{name} could not be attached": "{name} 파일을 첨부하지 못했습니다",
   "Not sent: Claude Code's rewind dialog is open in the terminal. Finish or close it there (Esc), then send this message.": "보내지 않음: 터미널에 Claude Code의 되감기 대화상자가 열려 있습니다. 그곳에서 마치거나 닫은(Esc) 뒤 이 메시지를 보내세요.",
   "Not updated: the question on screen may have changed.": "갱신되지 않음: 화면의 질문이 바뀌었을 수 있습니다.",
-  "Send": "보내기",
   "The dictation does not fit in the box": "받아쓴 내용이 입력창 한도를 넘어 넣지 않았습니다",
   "No speech was heard": "말소리가 들리지 않았습니다",
   "Add an OpenAI API key in Settings > Voice input": "설정 > 음성 입력에서 OpenAI API 키를 추가하세요",

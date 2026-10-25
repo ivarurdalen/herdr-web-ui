@@ -263,6 +263,11 @@ const BASE: Record<string, string> = {
   // t3code ports (d)
   "Change PC": "切换电脑",
   "Selected": "已选择",
+  "Rename": "重命名",
+  "Agent": "Agent",
+  "Send": "发送",
+  "Running": "运行中",
+  "Remove": "移除",
   // agent grid
   "Agent grid": "代理网格",
   "Columns": "列",
