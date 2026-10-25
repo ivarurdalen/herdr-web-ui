@@ -94,12 +94,16 @@ export function sanitizeGridViews(raw: unknown): GridView[] {
   return views;
 }
 
-// storage can throw (a private window, blocked site data): the grid then opens on the first view
+// this page's pick wins over storage, which can throw or keep an older id (a private window, blocked site data)
+let pickedViewId: string | null = null;
+
 export function loadGridViewId(): string | null {
+  if (pickedViewId !== null) return pickedViewId;
   try { return localStorage.getItem(VIEW_KEY); } catch { return null; }
 }
 
 export function storeGridViewId(id: string): void {
+  pickedViewId = id;
   try { localStorage.setItem(VIEW_KEY, id); } catch { /* per-browser convenience only */ }
 }
 

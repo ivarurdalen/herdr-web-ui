@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import type { Machine } from "../../shared/machines.ts";
 import type { HerdrPane, SessionSnapshot } from "../../shared/protocol.ts";
-import { arrangeView, chooseInView, EMPTY_GRID_FILTER, filterMachinesByRepo, filterView, fitGrid, gridChoices, gridTiles, lastSegment, loadBoard, matchesGridFilter, MAX_VIEWS, newGridView, openRepoView, placeInSlot, removeFromView, repoCounts, sanitizeGridViews, storeBoard, type GridView } from "./agentGrid.ts";
+import { arrangeView, chooseInView, EMPTY_GRID_FILTER, filterMachinesByRepo, filterView, fitGrid, gridChoices, gridTiles, lastSegment, loadBoard, loadGridViewId, matchesGridFilter, MAX_VIEWS, newGridView, openRepoView, placeInSlot, removeFromView, repoCounts, sanitizeGridViews, storeBoard, storeGridViewId, type GridView } from "./agentGrid.ts";
 
 function pane(id: string, overrides: Partial<HerdrPane> = {}): HerdrPane {
   return { pane_id: id, workspace_id: "w1", tab_id: "w1:t1", terminal_id: `${id}:term`, revision: 1, focused: false, agent_status: "idle", agent: "claude", ...overrides };
@@ -126,6 +126,16 @@ describe("repo views", () => {
       expect(["0", "1", "sessions", "repos", "bogus"].map((value) => (keyOf(value), loadBoard()))).toEqual([null, "grid", "sessions", "repos", "grid"]);
       stored.clear();
       expect(loadBoard()).toBe("grid");
+    });
+
+    it("reads back the picked view when storage refuses to write it", () => {
+      stored.set("herdr-web-ui:agent-grid-view", "old");
+      const setItem = localStorage.setItem;
+      localStorage.setItem = () => { throw new Error("quota"); };
+      try {
+        storeGridViewId("picked");
+        expect(loadGridViewId()).toBe("picked");
+      } finally { localStorage.setItem = setItem; }
     });
 
     it("stores the repos board as repos", () => {

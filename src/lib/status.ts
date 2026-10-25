@@ -34,7 +34,7 @@ const KNOWN: Readonly<Record<string, KnownStatus>> = { idle: "idle", working: "w
 
 /** herdr's AgentStatus is open-ended; the UI knows its states and files the rest under unknown. */
 export function knownStatus(status?: AgentStatus): KnownStatus {
-  return (status !== undefined && KNOWN[status]) || "unknown";
+  return status !== undefined && Object.hasOwn(KNOWN, status) ? KNOWN[status]! : "unknown";
 }
 
 /**

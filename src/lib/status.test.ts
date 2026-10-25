@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import { paneStatus, rollupStatus, statusEdgeRead } from "./status.ts";
+import { knownStatus, paneStatus, rollupStatus, statusEdgeRead } from "./status.ts";
 
 describe("rollupStatus", () => {
   it("rolls a workspace's panes up as herdr does: blocked, then done, then working, then ready", () => {
@@ -50,5 +50,12 @@ describe("statusEdgeRead", () => {
     expect(statusEdgeRead("idle", "done")).toBe(false);
     expect(statusEdgeRead("blocked", "idle")).toBe(false);
     expect(statusEdgeRead(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("knownStatus", () => {
+  it("files a status named like an Object property under unknown", () => {
+    expect(["constructor", "toString", "__proto__", "hasOwnProperty"].map((status) => knownStatus(status))).toEqual(["unknown", "unknown", "unknown", "unknown"]);
+    expect(knownStatus("blocked")).toBe("blocked");
   });
 });
