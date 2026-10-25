@@ -224,3 +224,171 @@
 .repo-agent.is-inactive .repo-agent-name { color: var(--text-dim); }
 
 .repo-agent-more { color: var(--text-dim); font-size: var(--fs-xs); }
+
+/* the toolbar: scopes, search and status, then the session and machine chips; every row wraps on a narrow screen */
+.repo-board-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.repo-toolbar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+}
+
+.repo-toolbar-label {
+  flex: none;
+  min-width: 5.5em;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+
+.repo-search {
+  flex: 1 1 12rem;
+  min-width: 0;
+  max-width: 24rem;
+}
+
+.repo-status { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.repo-status-count { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.repo-status [aria-pressed="true"] .repo-status-count { color: var(--text); }
+
+.repo-groupby { display: inline-flex; align-items: center; gap: var(--space-2); }
+.repo-groupby .repo-toolbar-label { min-width: 0; }
+
+.repo-groupby-select {
+  height: var(--control-h);
+  padding: 0 var(--space-2);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-md);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.repo-clear { margin-inline-start: auto; }
+
+.repo-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  height: calc(var(--chip-h) + var(--space-2));
+  padding: 0 var(--space-2);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--hairline) solid var(--border);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.repo-chip:hover { background: var(--bg-hover); }
+.repo-chip:focus-visible { outline: var(--hairline) solid var(--accent); outline-offset: var(--hairline); }
+
+.repo-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--text-strong);
+}
+
+.repo-chip-dot, .repo-session-dot, .repo-group-dot {
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--repo-color);
+}
+
+.repo-chip-count { color: var(--text-dim); }
+
+.repo-chip-active {
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--status-working) 18%, transparent);
+  color: var(--status-working);
+  font-weight: 600;
+}
+
+/* a saved scope: its chip and a small x that sits inside the pill's end */
+.repo-scope { display: inline-flex; align-items: center; }
+.repo-scope-chip { padding-inline-end: var(--space-5); }
+
+.repo-scope-delete {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--space-5);
+  height: var(--space-5);
+  margin-inline-start: calc(var(--space-5) * -1);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--text-dim);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.repo-scope-delete:hover { background: var(--bg-hover); color: var(--status-blocked); }
+.repo-scope-delete:focus-visible { outline: var(--hairline) solid var(--accent); }
+
+.repo-scope-name { flex: 0 1 14rem; min-width: 0; height: calc(var(--chip-h) + var(--space-2)); }
+
+.repo-board-none {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-6) auto;
+}
+
+.repo-board-none .repo-board-empty { margin: 0; }
+
+/* a group of cards: a header with the group's color and numbers, then the same card grid */
+.repo-group { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+
+.repo-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  padding-bottom: var(--space-1);
+  border-bottom: var(--hairline) solid var(--border);
+}
+
+.repo-group-dot { align-self: center; }
+.repo-group-dot[data-attention="blocked"] { background: var(--status-blocked); }
+.repo-group-dot[data-attention="active"] { background: var(--status-working); }
+.repo-group-dot[data-attention="inactive"] { background: var(--status-idle); }
+
+.repo-group-label {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.repo-group-counts { color: var(--text-dim); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+
+/* the herdr sessions a card runs in, beside its machines and workspaces */
+.repo-session {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--repo-color) 16%, var(--bg-elevated));
+  color: var(--text-strong);
+  font-weight: 600;
+}

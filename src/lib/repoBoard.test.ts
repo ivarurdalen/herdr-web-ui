@@ -200,7 +200,7 @@ describe("the board's scope", () => {
 });
 
 describe("sanitizeRepoScopes", () => {
-  const scope = { id: "a", name: "Personal", sessions: ["private"], machines: [], status: "active" };
+  const scope = { id: "a", name: "Personal", sessions: ["private"], machines: [] as string[], status: "active" as const };
 
   it("keeps a well-formed scope and drops anything else", () => {
     expect(sanitizeRepoScopes([scope, null, "x", { name: "no id" }, { ...scope, id: "" }])).toEqual([scope]);
@@ -238,7 +238,7 @@ describe("the kept board state", () => {
   });
 
   it("falls back to the defaults for nothing, garbage or a bad field", () => {
-    const defaults = { filter: EMPTY_REPO_FILTER, groupBy: "none", scopeId: null };
+    const defaults = { filter: EMPTY_REPO_FILTER, groupBy: "none" as const, scopeId: null };
     expect(loadRepoBoardState()).toEqual(defaults);
     stored.set("herdr-web-ui:repo-board", "{oops");
     expect(loadRepoBoardState()).toEqual(defaults);
