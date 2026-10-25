@@ -138,6 +138,11 @@ describe("the board's scope", () => {
       expect(keep({ status: "active" })).toEqual(["ovis@private", "platform@exabel"]);
       expect(keep({ status: "inactive" })).toHaveLength(2);
     });
+    it("matches the agent's display label", () => {
+      const labelled = tiles.map((tile, index) => (index === 0 ? { ...tile, entry: { ...tile.entry, agentLabel: "Reviewer" } } : tile));
+      expect(filterTiles(labelled, { ...EMPTY_REPO_FILTER, query: "review" })).toEqual([labelled[0]!]);
+    });
+
     it("matches the query without case in the repo, the session label or the machine", () => {
       expect(keep({ query: " PLATFORM " })).toEqual(["platform@exabel"]);
       expect(keep({ query: "EXAB" })).toHaveLength(2);
@@ -212,7 +217,7 @@ describe("sanitizeRepoScopes", () => {
     expect(sanitizeRepoScopes(Array.from({ length: 20 }, (_, index) => ({ ...scope, id: `s${index}` })))).toHaveLength(12);
     const [cut] = sanitizeRepoScopes([{ ...scope, name: "n".repeat(90), sessions: Array.from({ length: 40 }, (_, index) => `s${index}`), machines: ["ok", "x".repeat(301), 4], status: "bogus" }]);
     expect(cut!.name).toHaveLength(40);
-    expect(cut!.sessions).toHaveLength(24);
+    expect(cut!.sessions).toHaveLength(16);
     expect(cut!.machines).toEqual(["ok"]);
     expect(cut!.status).toBe("all");
   });
@@ -235,6 +240,12 @@ describe("the kept board state", () => {
     const state = { filter: { query: "q", status: "blocked" as const, sessions: ["a"], machines: ["m"] }, groupBy: "session" as const, scopeId: "s1" };
     storeRepoBoardState(state);
     expect(loadRepoBoardState()).toEqual(state);
+  });
+
+  it("keeps every session and machine this browser chose, past the scope limit", () => {
+    const many = Array.from({ length: 30 }, (_, index) => `session-${index}`);
+    storeRepoBoardState({ filter: { ...EMPTY_REPO_FILTER, sessions: many, machines: many }, groupBy: "none", scopeId: null });
+    expect(loadRepoBoardState().filter.sessions).toEqual(many);
   });
 
   it("falls back to the defaults for nothing, garbage or a bad field", () => {

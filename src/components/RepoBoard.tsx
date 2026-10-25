@@ -222,7 +222,7 @@ export function RepoBoard({ machines, onOpenGrid }: Props) {
                 ? <button type="button" className="btn btn-ghost repo-scope-save" disabled={!narrowed || scopes.length >= MAX_REPO_SCOPES} onClick={() => setNaming("")}>{t("Save as scope")}</button>
                 : <input className="input repo-scope-name" value={naming} maxLength={40} autoFocus aria-label={t("Scope name")} placeholder={t("Scope name")}
                   onChange={(event) => setNaming(event.target.value)} onBlur={() => { if (naming === "") setNaming(null); }}
-                  onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); save(); } else if (event.key === "Escape") { event.stopPropagation(); setNaming(null); } }} />}
+                  onKeyDown={(event) => { if (event.nativeEvent.isComposing) return; if (event.key === "Enter") { event.preventDefault(); save(); } else if (event.key === "Escape") { event.stopPropagation(); setNaming(null); } }} />}
             </div>
             <div className="repo-toolbar-row">
               <input type="search" className="input repo-search" value={filter.query} placeholder={t("Search repos and agents")} aria-label={t("Search repos and agents")}

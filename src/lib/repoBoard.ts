@@ -115,8 +115,8 @@ export function filterTiles(tiles: readonly GridTile[], filter: RepoFilter, skip
     if (skip !== "sessions" && filter.sessions.length > 0 && !filter.sessions.includes(sessionKey(tile))) return false;
     if (skip !== "machines" && filter.machines.length > 0 && !filter.machines.includes(tile.host)) return false;
     if (!query) return true;
-    const { pane, agent, workspace } = tile.entry;
-    return [tile.repo, workspace.label, pane.title, pane.label, agent?.title, agent?.name, sessionLabel(sessionKey(tile)), tile.host]
+    const { pane, agent, workspace, agentLabel } = tile.entry;
+    return [tile.repo, workspace.label, pane.title, pane.label, agent?.title, agent?.name, agentLabel, sessionLabel(sessionKey(tile)), tile.host]
       .some((text) => text?.toLowerCase().includes(query));
   });
 }
@@ -195,12 +195,17 @@ export interface RepoScope {
 
 export const MAX_REPO_SCOPES = 12;
 const MAX_SCOPE_NAME = 40;
-const MAX_SCOPE_ENTRIES = 24;
-const MAX_TEXT = 300;
+// the scopes travel in the shared preferences, which the server caps as a whole, so every limit stays small
+const MAX_SCOPE_ENTRIES = 16;
+const MAX_TEXT = 64;
+// what this browser keeps for itself has no such cap: every choice the board offers comes back
+const MAX_KEPT_ENTRIES = 500;
 const STATUSES: ReadonlySet<unknown> = new Set(["all", "blocked", "active", "inactive"]);
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.length > 0 && value.length <= MAX_TEXT ? value : null);
-const list = (value: unknown): string[] => (Array.isArray(value) ? value.map(text).filter((entry): entry is string => entry !== null).slice(0, MAX_SCOPE_ENTRIES) : []);
+const list = (value: unknown, max = MAX_SCOPE_ENTRIES, length = MAX_TEXT): string[] => (Array.isArray(value)
+  ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0 && entry.length <= length).slice(0, max)
+  : []);
 
 /** The saved scopes as stored or sent by another browser, cut to the shape and the limits. */
 export function sanitizeRepoScopes(raw: unknown): RepoScope[] {
@@ -247,8 +252,8 @@ export function loadRepoBoardState(): RepoBoardState {
       filter: {
         query: typeof filter["query"] === "string" ? filter["query"] : "",
         status: STATUSES.has(filter["status"]) ? (filter["status"] as RepoFilter["status"]) : "all",
-        sessions: list(filter["sessions"]),
-        machines: list(filter["machines"]),
+        sessions: list(filter["sessions"], MAX_KEPT_ENTRIES, 300),
+        machines: list(filter["machines"], MAX_KEPT_ENTRIES, 300),
       },
       groupBy: GROUPS.has(record["groupBy"]) ? (record["groupBy"] as GroupBy) : "none",
       scopeId: typeof record["scopeId"] === "string" ? record["scopeId"] : null,
