@@ -121,6 +121,7 @@ export function loadBoard(search: string = typeof location === "undefined" ? "" 
   if (linked !== null && Object.hasOwn(LINKED_BOARDS, linked)) {
     const board = LINKED_BOARDS[linked]!;
     storeBoard(board);
+    dropBoardParam();
     return board;
   }
   try {
@@ -129,6 +130,15 @@ export function loadBoard(search: string = typeof location === "undefined" ? "" 
   } catch {
     return "grid";
   }
+}
+
+// the address bar keeps parameters it does not own, so a linked board would reopen on every reload
+function dropBoardParam(): void {
+  if (typeof location === "undefined" || typeof history === "undefined") return;
+  const url = new URL(location.href);
+  if (!url.searchParams.has("board")) return;
+  url.searchParams.delete("board");
+  history.replaceState(history.state, "", url);
 }
 
 export function storeBoard(board: Board): void {
