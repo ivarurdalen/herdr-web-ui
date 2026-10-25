@@ -1,9 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import type { AgentSessionRecord } from "../../shared/agent-sessions.ts";
 import type { Machine } from "../../shared/machines.ts";
 import type { HerdrPane, SessionSnapshot } from "../../shared/protocol.ts";
 import { gridTiles } from "./agentGrid.ts";
-import { REPO_COLORS, repoColor, repoStats } from "./repoBoard.ts";
+import {
+  choices, EMPTY_REPO_FILTER, filterTiles, groupRepos, loadRepoBoardState, matchesScope, REPO_COLORS, repoColor, repoStats, sanitizeRepoScopes,
+  sessionKey, sessionLabel, statusClass, statusCounts, storeRepoBoardState, type RepoFilter,
+} from "./repoBoard.ts";
 
 function pane(id: string, workspace: string, overrides: Partial<HerdrPane> = {}): HerdrPane {
   return { pane_id: id, workspace_id: workspace, tab_id: `${workspace}:t1`, terminal_id: `${id}:term`, revision: 1, focused: false, agent_status: "idle", agent: "claude", ...overrides };
@@ -94,5 +97,152 @@ describe("repoColor", () => {
 
   it("spreads names over more than one token", () => {
     expect(new Set(["devkit", "estrada", "ovis", "whisper", "herdr", "exabel"].map(repoColor)).size).toBeGreaterThan(2);
+  });
+});
+
+/** A machine `name` on `host`, in the herdr session `session` (the hub's own when null), with one workspace per `[repo, status]`. */
+function sessionBox(host: string, session: string | null, agents: Array<[string, string]>): Machine {
+  const box = machine(`${host}-${session ?? "hub"}`, agents.map(([repo], index) => [`w${index}`, repo, [pane(`p${index}`, `w${index}`, { agent_status: agents[index]![1] as never })]]));
+  return { ...box, name: session === null ? host : `${host}/${session}`, ...(session === null ? {} : { target: { destination: host, session } }) } as Machine;
+}
+
+describe("the board's scope", () => {
+  const tiles = gridTiles([
+    sessionBox("laptop", "private", [["ovis", "working"], ["dots", "idle"]]),
+    sessionBox("laptop", null, [["ovis", "blocked"]]),
+    sessionBox("server", "exabel", [["platform", "working"], ["ovis", "done"]]),
+  ]);
+
+  it("names an agent's session, the machine's own default session by its host", () => {
+    expect(tiles.map(sessionKey)).toEqual(["private", "private", "@laptop", "exabel", "exabel"]);
+    expect(["private", "@laptop"].map(sessionLabel)).toEqual(["private", "laptop"]);
+  });
+
+  it("classes a status as needs input, active or inactive", () => {
+    expect(["blocked", "working", "waiting", "done", "idle", "unknown"].map((status) => statusClass(status as never))).toEqual(["blocked", "active", "active", "inactive", "inactive", "inactive"]);
+    expect(statusCounts(tiles)).toEqual({ blocked: 1, active: 2, inactive: 2 });
+  });
+
+  it("lists the repo's sessions, sorted", () => {
+    expect(repoStats(tiles, []).find((stats) => stats.repo === "ovis")!.sessions).toEqual(["@laptop", "exabel", "private"]);
+  });
+
+  describe("filterTiles", () => {
+    const keep = (filter: Partial<RepoFilter>) => filterTiles(tiles, { ...EMPTY_REPO_FILTER, ...filter }).map((tile) => `${tile.repo}@${sessionKey(tile)}`);
+
+    it("keeps everything for an empty filter", () => expect(keep({})).toHaveLength(5));
+    it("keeps the chosen sessions, hub session by its key", () => expect(keep({ sessions: ["exabel", "@laptop"] })).toEqual(["ovis@@laptop", "platform@exabel", "ovis@exabel"]));
+    it("keeps the chosen machines", () => expect(keep({ machines: ["server"] })).toEqual(["platform@exabel", "ovis@exabel"]));
+    it("keeps one status class", () => {
+      expect(keep({ status: "blocked" })).toEqual(["ovis@@laptop"]);
+      expect(keep({ status: "active" })).toEqual(["ovis@private", "platform@exabel"]);
+      expect(keep({ status: "inactive" })).toHaveLength(2);
+    });
+    it("matches the query without case in the repo, the session label or the machine", () => {
+      expect(keep({ query: " PLATFORM " })).toEqual(["platform@exabel"]);
+      expect(keep({ query: "EXAB" })).toHaveLength(2);
+      expect(keep({ query: "server" })).toHaveLength(2);
+      expect(keep({ query: "nothing here" })).toEqual([]);
+    });
+    it("combines the parts", () => expect(keep({ sessions: ["private"], status: "active" })).toEqual(["ovis@private"]));
+    it("leaves a part out for the counts beside its own chips", () => {
+      expect(filterTiles(tiles, { ...EMPTY_REPO_FILTER, status: "blocked", sessions: ["exabel"] }, "status")).toHaveLength(2);
+    });
+  });
+
+  describe("groupRepos", () => {
+    it("makes one group of everything for none", () => {
+      const [group, ...rest] = groupRepos(tiles, [], "none");
+      expect(rest).toEqual([]);
+      expect(group!.totals).toEqual({ agents: 5, active: 3, blocked: 1 });
+      expect(group!.repos.map((stats) => stats.repo)).toEqual(["ovis", "platform", "dots"]);
+    });
+
+    it("counts only a session's own agents in its group, and shows a repo in every session it runs in", () => {
+      const groups = groupRepos(tiles, [], "session");
+      expect(groups.map((group) => group.label)).toEqual(["laptop", "exabel", "private"]);
+      const inGroup = (label: string) => Object.fromEntries(groups.find((group) => group.label === label)!.repos.map((stats) => [stats.repo, stats.total]));
+      expect(inGroup("exabel")).toEqual({ ovis: 1, platform: 1 });
+      expect(inGroup("private")).toEqual({ ovis: 1, dots: 1 });
+      expect(inGroup("laptop")).toEqual({ ovis: 1 });
+      expect(groups.find((group) => group.label === "exabel")!.totals).toEqual({ agents: 2, active: 1, blocked: 0 });
+    });
+
+    it("groups by machine", () => {
+      const groups = groupRepos(tiles, [], "machine");
+      expect(groups.map((group) => [group.key, group.totals.agents])).toEqual([["laptop", 3], ["server", 2]]);
+    });
+
+    it("puts a repo in the first attention group that applies, and drops an empty one", () => {
+      const groups = groupRepos(tiles, [], "attention");
+      expect(groups.map((group) => [group.label, group.repos.map((stats) => stats.repo)])).toEqual([
+        ["Needs input", ["ovis"]], ["Active", ["platform"]], ["Inactive", ["dots"]],
+      ]);
+      expect(groupRepos(filterTiles(tiles, { ...EMPTY_REPO_FILTER, status: "inactive" }), [], "attention").map((group) => group.key)).toEqual(["inactive"]);
+    });
+
+    it("sorts groups by blocked, active, agents, then label", () => {
+      const groups = groupRepos(gridTiles([
+        sessionBox("a", "zeta", [["r", "idle"]]), sessionBox("a", "alpha", [["r", "idle"]]), sessionBox("a", "busy", [["r", "working"]]), sessionBox("a", "stuck", [["r", "blocked"]]),
+      ]), [], "session");
+      expect(groups.map((group) => group.label)).toEqual(["stuck", "busy", "alpha", "zeta"]);
+    });
+
+    it("returns no group without tiles", () => expect(groupRepos([], [], "none")).toEqual([]));
+  });
+
+  it("lists the sessions and machines with their agent and active counts", () => {
+    expect(choices(tiles)).toEqual({
+      sessions: [{ key: "exabel", label: "exabel", agents: 2, active: 1 }, { key: "@laptop", label: "laptop", agents: 1, active: 1 }, { key: "private", label: "private", agents: 2, active: 1 }],
+      machines: [{ key: "laptop", label: "laptop", agents: 3, active: 2 }, { key: "server", label: "server", agents: 2, active: 1 }],
+    });
+  });
+});
+
+describe("sanitizeRepoScopes", () => {
+  const scope = { id: "a", name: "Personal", sessions: ["private"], machines: [], status: "active" };
+
+  it("keeps a well-formed scope and drops anything else", () => {
+    expect(sanitizeRepoScopes([scope, null, "x", { name: "no id" }, { ...scope, id: "" }])).toEqual([scope]);
+    expect(sanitizeRepoScopes("nope")).toEqual([]);
+  });
+
+  it("keeps an id once, cuts the count, the name and the lists, and turns an unknown status into all", () => {
+    expect(sanitizeRepoScopes([scope, { ...scope, name: "again" }])).toHaveLength(1);
+    expect(sanitizeRepoScopes(Array.from({ length: 20 }, (_, index) => ({ ...scope, id: `s${index}` })))).toHaveLength(12);
+    const [cut] = sanitizeRepoScopes([{ ...scope, name: "n".repeat(90), sessions: Array.from({ length: 40 }, (_, index) => `s${index}`), machines: ["ok", "x".repeat(301), 4], status: "bogus" }]);
+    expect(cut!.name).toHaveLength(40);
+    expect(cut!.sessions).toHaveLength(24);
+    expect(cut!.machines).toEqual(["ok"]);
+    expect(cut!.status).toBe("all");
+  });
+
+  it("compares a filter with a scope by content, order aside", () => {
+    expect(matchesScope({ ...EMPTY_REPO_FILTER, query: "x", sessions: ["b", "a"], status: "active" }, { ...scope, sessions: ["a", "b"] })).toBe(true);
+    expect(matchesScope({ ...EMPTY_REPO_FILTER, sessions: ["a"], status: "active" }, { ...scope, sessions: ["a", "b"] })).toBe(false);
+    expect(matchesScope(EMPTY_REPO_FILTER, { ...scope, sessions: [], status: "all" })).toBe(true);
+  });
+});
+
+describe("the kept board state", () => {
+  const stored = new Map<string, string>();
+  const original = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  beforeAll(() => Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => void stored.set(key, value) } }));
+  afterAll(() => { if (original) Object.defineProperty(globalThis, "localStorage", original); else Reflect.deleteProperty(globalThis, "localStorage"); });
+  afterEach(() => stored.clear());
+
+  it("reads back what it stored", () => {
+    const state = { filter: { query: "q", status: "blocked" as const, sessions: ["a"], machines: ["m"] }, groupBy: "session" as const, scopeId: "s1" };
+    storeRepoBoardState(state);
+    expect(loadRepoBoardState()).toEqual(state);
+  });
+
+  it("falls back to the defaults for nothing, garbage or a bad field", () => {
+    const defaults = { filter: EMPTY_REPO_FILTER, groupBy: "none", scopeId: null };
+    expect(loadRepoBoardState()).toEqual(defaults);
+    stored.set("herdr-web-ui:repo-board", "{oops");
+    expect(loadRepoBoardState()).toEqual(defaults);
+    stored.set("herdr-web-ui:repo-board", JSON.stringify({ filter: { status: "x", sessions: "no" }, groupBy: "x", scopeId: 3 }));
+    expect(loadRepoBoardState()).toEqual(defaults);
   });
 });

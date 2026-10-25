@@ -101,6 +101,26 @@ describe("repo views", () => {
       expect(result.views.map((view) => view.id)).toEqual(full.map((view, index) => (index === MAX_VIEWS - 2 ? "new" : view.id)));
     });
 
+    it("scopes a new view to a herdr session or a PC and names it after the place", () => {
+      const bySession = openRepoView([], "devkit", 2, "s", { host: null, herdrSession: "work" })!;
+      expect(bySession.views[0]).toMatchObject({ name: "devkit · work", repo: "devkit", host: null, herdrSession: "work" });
+      const byHost = openRepoView([], "devkit", 2, "h", { host: "box", herdrSession: null })!;
+      expect(byHost.views[0]).toMatchObject({ name: "devkit · box", host: "box", herdrSession: null });
+    });
+
+    it("reuses a clean view of the same scope only", () => {
+      const scoped = { ...repoOnly("s", "devkit"), name: "devkit · work", herdrSession: "work" };
+      expect(openRepoView([repoOnly("p", "devkit"), scoped], "devkit", 2, "new", { host: null, herdrSession: "work" })!.id).toBe("s");
+      expect(openRepoView([scoped], "devkit", 2, "new")!.id).toBe("new");
+      expect(openRepoView([scoped], "devkit", 2, "new", { host: "box", herdrSession: null })!.id).toBe("new");
+    });
+
+    it("replaces a scoped view still under its own name once the views are full", () => {
+      const full = Array.from({ length: MAX_VIEWS }, (_, index) => ({ ...newGridView(`v${index}`, `View ${index}`) }));
+      full[4] = { ...repoOnly("v4", "ovis"), name: "ovis · work", herdrSession: "work" };
+      expect(openRepoView(full, "devkit", 2, "new")!.views.map((view) => view.id)).toEqual(full.map((view, index) => (index === 4 ? "new" : view.id)));
+    });
+
     it("leaves the grid on its current view when full and no view can be replaced", () => {
       const full = Array.from({ length: MAX_VIEWS }, (_, index) => ({ ...newGridView(`v${index}`, `View ${index}`) }));
       expect(openRepoView(full, "devkit", 2, "new")).toBeNull();

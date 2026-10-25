@@ -182,21 +182,36 @@ export function fitGrid(count: number): { columns: number; rows: number } {
   return { columns: GRID_MAX_COLUMNS, rows: GRID_MAX_ROWS };
 }
 
-/** A view filtered to one repo alone with no hand-placed tile: the grid's own repo view, safe to reuse or replace. */
-const isRepoView = (view: GridView): boolean => view.repo !== null && view.host === null && view.herdrSession === null && view.slots.every((slot) => slot === null);
+/** Where a card was clicked: the herdr session or the PC the board was scoped to; null is anywhere. */
+export interface RepoViewScope { host: string | null; herdrSession: string | null }
+
+const scopeName = (repo: string, scope: RepoViewScope): string => {
+  const place = scope.herdrSession ?? scope.host;
+  return place === null ? repo : `${repo} · ${place}`;
+};
+
+const noPlacedTile = (view: GridView): boolean => view.slots.every((slot) => slot === null);
+
+/** The grid's own repo view of a scope: one repo, that scope, no hand-placed tile. */
+const isRepoView = (view: GridView, repo: string, scope: RepoViewScope): boolean =>
+  view.repo === repo && view.host === scope.host && view.herdrSession === scope.herdrSession && noPlacedTile(view);
+
+/** A clean view this feature made, safe to replace: the plain repo view, or a scoped one still under its own name. */
+const isReplaceable = (view: GridView): boolean =>
+  view.repo !== null && noPlacedTile(view) && (view.host === null && view.herdrSession === null || view.name === scopeName(view.repo, view));
 
 /**
  * Where a click on `repo` takes the grid. `views` is what the grid shows now. It returns the views
- * to save and the one to select: the repo's clean view, else a new one sized to fit (replacing the
- * last clean view of another repo once the saved views are full). Null when nothing fits, so the
+ * to save and the one to select: the repo's clean view in that scope, else a new one sized to fit
+ * (replacing the last clean view once the saved views are full). Null when nothing fits, so the
  * grid stays on its current view.
  */
-export function openRepoView(views: readonly GridView[], repo: string, count: number, id: string): { views: GridView[]; id: string } | null {
-  const existing = views.find((view) => view.repo === repo && isRepoView(view));
+export function openRepoView(views: readonly GridView[], repo: string, count: number, id: string, scope: RepoViewScope = { host: null, herdrSession: null }): { views: GridView[]; id: string } | null {
+  const existing = views.find((view) => isRepoView(view, repo, scope));
   if (existing) return { views: [...views], id: existing.id };
-  const next: GridView = { ...newGridView(id, repo), ...fitGrid(count), repo };
+  const next: GridView = { ...newGridView(id, scopeName(repo, scope)), ...fitGrid(count), repo, host: scope.host, herdrSession: scope.herdrSession };
   if (views.length < MAX_VIEWS) return { views: [...views, next], id };
-  const index = views.map(isRepoView).lastIndexOf(true);
+  const index = views.map(isReplaceable).lastIndexOf(true);
   return index < 0 ? null : { views: views.map((view, at) => (at === index ? next : view)), id };
 }
 
