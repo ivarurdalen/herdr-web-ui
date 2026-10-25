@@ -138,6 +138,15 @@ describe("repo views", () => {
       } finally { localStorage.setItem = setItem; }
     });
 
+    it("opens the board a link names and keeps it, and ignores a board it does not know", () => {
+      stored.set("herdr-web-ui:agent-grid-open", "sessions");
+      expect(loadBoard("?board=repos")).toBe("repos");
+      expect(loadBoard("")).toBe("repos");
+      expect(loadBoard("?board=none")).toBeNull();
+      expect(loadBoard("?board=constructor")).toBeNull();
+      expect(loadBoard("?machine=local&board=grid")).toBe("grid");
+    });
+
     it("stores the repos board as repos", () => {
       storeBoard("repos");
       expect(stored.get("herdr-web-ui:agent-grid-open")).toBe("repos");

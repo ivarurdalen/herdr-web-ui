@@ -5,3 +5,5 @@
   repo's view.
 - Repos board cards say how many agents are active (needs input, working, waiting) and inactive, flag
   the ones that need input, and name up to five agents with their status, the ones in a turn first.
+- A link can open a board: `?board=repos`, `grid`, `sessions` or `none`. The browser keeps that board as its
+  choice, as if picked from the header.

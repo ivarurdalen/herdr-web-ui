@@ -110,8 +110,19 @@ export function storeGridViewId(id: string): void {
 /** What takes the pane area's place: the grid, the agent sessions page, the Repos board, or nothing (the pane itself). */
 export type Board = "grid" | "sessions" | "repos" | null;
 
-/** The grid unless this browser chose otherwise: the grid is what this build is for. */
-export function loadBoard(): Board {
+const LINKED_BOARDS: Readonly<Record<string, Board>> = { grid: "grid", sessions: "sessions", repos: "repos", none: null };
+
+/**
+ * A link's `?board=` (grid, sessions, repos or none) first, kept as this browser's choice; else the
+ * grid unless this browser chose otherwise: the grid is what this build is for.
+ */
+export function loadBoard(search: string = typeof location === "undefined" ? "" : location.search): Board {
+  const linked = new URLSearchParams(search).get("board");
+  if (linked !== null && Object.hasOwn(LINKED_BOARDS, linked)) {
+    const board = LINKED_BOARDS[linked]!;
+    storeBoard(board);
+    return board;
+  }
   try {
     const value = localStorage.getItem(OPEN_KEY);
     return value === "0" ? null : value === "sessions" || value === "repos" ? value : "grid";
