@@ -563,7 +563,6 @@ export function App() {
             <History />
           </button>
           <RepoFilter repos={sidebarRepoCounts} chosen={sidebarRepos} onChange={setSidebarRepos} />
-          <RepoFilter repos={sidebarRepoCounts} chosen={sidebarRepos} onChange={setSidebarRepos} />
         </div>
         <HeaderNote note={note} />
         {note !== null ? null : board !== null ? (
