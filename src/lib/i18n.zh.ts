@@ -335,6 +335,19 @@ const BASE: Record<string, string> = {
   "Linear issues": "Linear 问题",
   "Open the chat": "打开聊天",
   "Pull requests": "拉取请求",
+  "Repos": "仓库",
+  "Working": "工作中",
+  "Waiting": "等待中",
+  "Idle": "空闲",
+  "Unknown": "未知",
+  "{n} repos": "{n} 个仓库",
+  "{n} agents": "{n} 个代理",
+  "{n} PCs": "{n} 台 PC",
+  "{n} workspaces": "{n} 个工作区",
+  "{n} pull requests": "{n} 个拉取请求",
+  "{n} Linear issues": "{n} 个 Linear 问题",
+  "Open the agent grid on {repo}": "在代理网格中打开 {repo}",
+  "No agents are running on a connected PC.": "已连接的 PC 上没有运行中的代理。",
 };
 
 /** The parts ZH is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */

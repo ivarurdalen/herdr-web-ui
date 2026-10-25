@@ -1,5 +1,5 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bell, Ellipsis, FolderOpen, History, LayoutGrid, Link, Menu, MessageSquare, PanelLeft, Search, SquareTerminal, X } from "lucide-react";
+import { Bell, Ellipsis, FolderGit2, FolderOpen, History, LayoutGrid, Link, Menu, MessageSquare, PanelLeft, Search, SquareTerminal, X } from "lucide-react";
 
 import type { HerdrPane } from "../shared/protocol.ts";
 import { authenticate, createTab, pairDevice, shareSeen, signOut, splitPane, zoomPane } from "./lib/api.ts";
@@ -81,6 +81,7 @@ import { RenderBoundary } from "./components/RenderBoundary.tsx";
 import { AgentGrid } from "./components/AgentGrid.tsx";
 import { useAgentBoard, useSidebarRepos } from "./lib/useAgentBoard.ts";
 import { AgentSessionsPage } from "./components/AgentSessionsPage.tsx";
+import { RepoBoard } from "./components/RepoBoard.tsx";
 import { RepoFilter } from "./components/RepoFilter.tsx";
 import { storedView, usePaneLens, usePaneLensState, usePaneViewPicks } from "./lib/usePaneLens.ts";
 import { useSplitLayout, useSplitRecheck, useSplitState } from "./lib/useSplitView.ts";
@@ -562,11 +563,14 @@ export function App() {
           <button type="button" className="icon-button sessions-toggle" aria-label={t("Agent sessions")} title={t("Agent sessions")} aria-pressed={board === "sessions"} onClick={() => { setBoard(board === "sessions" ? null : "sessions"); setDrawerOpen(false); }}>
             <History />
           </button>
+          <button type="button" className="icon-button repos-toggle" aria-label={t("Repos")} title={t("Repos")} aria-pressed={board === "repos"} onClick={() => { setBoard(board === "repos" ? null : "repos"); setDrawerOpen(false); }}>
+            <FolderGit2 />
+          </button>
           <RepoFilter repos={sidebarRepoCounts} chosen={sidebarRepos} onChange={setSidebarRepos} />
         </div>
         <HeaderNote note={note} />
         {note !== null ? null : board !== null ? (
-          <><Brand /><span className="machine-context-name">{t(board === "grid" ? "Agent grid" : "Agent sessions")}</span></>
+          <><Brand /><span className="machine-context-name">{t(board === "grid" ? "Agent grid" : board === "repos" ? "Repos" : "Agent sessions")}</span></>
         ) : selectedPane && crumb ? (
           <div className="context" title={crumb.tooltip}>
             <div className="context-title">
@@ -685,7 +689,7 @@ export function App() {
         {shownHealth?.lan_exposure && <LanExposureNotice host={shownHealth.lan_exposure.host} onOpen={() => { setSettingsLinkPage("devices"); setSettingsOpen(true); }} />}
         {/* the pane's tab, or two tabs side by side (lib/split.ts): a tab dragged down out of its strip,
             or a sidebar row dragged over this area, opens its pane in the half it is dropped on */}
-        {board === "sessions" ? <AgentSessionsPage onOpen={openFromGrid} /> : gridOpen ? <AgentGrid machines={machines} onOpen={openFromGrid} /> : <div ref={paneAreaRef} className={`pane-split${splitOn ? " is-split" : ""}`} onDragEnterCapture={paneDragOver} onDragOverCapture={paneDragOver} onDragLeave={paneDragLeave} onDropCapture={paneDrop}>
+        {board === "sessions" ? <AgentSessionsPage onOpen={openFromGrid} /> : board === "repos" ? <RepoBoard machines={machines} onOpenGrid={() => setBoard("grid")} /> : gridOpen ? <AgentGrid machines={machines} onOpen={openFromGrid} /> : <div ref={paneAreaRef} className={`pane-split${splitOn ? " is-split" : ""}`} onDragEnterCapture={paneDragOver} onDragOverCapture={paneDragOver} onDragLeave={paneDragLeave} onDropCapture={paneDrop}>
           {(["a", "b"] as const).map((slot) => {
             // one pane: the solo slot, or a split's active half where the window is too narrow for both
             if (!splitOn && slot !== (split ? split.active : soloSlot)) return null;

@@ -333,6 +333,19 @@ const BASE: Record<string, string> = {
   "Linear issues": "Linear イシュー",
   "Open the chat": "チャットを開く",
   "Pull requests": "プルリクエスト",
+  "Repos": "リポジトリ",
+  "Working": "作業中",
+  "Waiting": "待機中",
+  "Idle": "アイドル",
+  "Unknown": "不明",
+  "{n} repos": "リポジトリ{n}件",
+  "{n} agents": "エージェント{n}件",
+  "{n} PCs": "PC {n}台",
+  "{n} workspaces": "ワークスペース{n}件",
+  "{n} pull requests": "プルリクエスト{n}件",
+  "{n} Linear issues": "Linear イシュー{n}件",
+  "Open the agent grid on {repo}": "{repo} のエージェントグリッドを開く",
+  "No agents are running on a connected PC.": "接続中の PC で動いているエージェントはありません。",
 };
 
 /** The parts JA is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */

@@ -1,0 +1,177 @@
+/* The Repos board: a card per repo in an auto-fill grid, the repo's color on its edge and badge. */
+.repo-board {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-3);
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.repo-board-summary {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.repo-board-total { color: var(--text-strong); font-weight: 600; }
+
+.repo-board-empty {
+  margin: auto;
+  color: var(--text-dim);
+  font-size: var(--fs-md);
+}
+
+.repo-board-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.repo-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
+  border: var(--hairline) solid var(--border);
+  border-inline-start: var(--space-1) solid var(--repo-color);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--repo-color) 7%, var(--bg-elevated));
+  color: var(--text);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: start;
+  cursor: pointer;
+}
+
+.repo-card:hover {
+  background: color-mix(in srgb, var(--repo-color) 13%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--repo-color) 45%, var(--border));
+}
+
+.repo-card:focus-visible { outline: var(--hairline) solid var(--accent); outline-offset: var(--hairline); }
+
+/* a blocked agent asks for a person: the whole edge turns to the blocked color */
+.repo-card[data-blocked] {
+  border-color: var(--status-blocked);
+  border-inline-start-color: var(--repo-color);
+}
+
+.repo-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.repo-card-badge {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--repo-color) 22%, var(--bg-elevated));
+  border: var(--hairline) solid color-mix(in srgb, var(--repo-color) 55%, transparent);
+  color: var(--repo-color);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.repo-card-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-strong);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-card-total {
+  flex: none;
+  color: var(--text-strong);
+  font-size: var(--fs-display);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.repo-card-bar {
+  display: flex;
+  gap: var(--hairline);
+  height: var(--space-2);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--bg-hover);
+}
+
+.repo-card-bar > span { min-width: var(--space-1); flex-basis: 0; }
+
+.repo-card-counts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-3);
+}
+
+.repo-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.repo-count-dot {
+  flex: none;
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--repo-status);
+}
+
+.repo-count-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.repo-count-n { color: var(--text-strong); font-weight: 600; }
+
+.repo-count.is-zero { opacity: 0.45; }
+.repo-count.is-zero .repo-count-n { font-weight: 400; }
+
+.repo-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  padding-top: var(--space-2);
+  border-top: var(--hairline) solid var(--border);
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+}
+
+.repo-card-meta .is-zero { opacity: 0.55; }
+
+/* each status's color, for its dot and its bar segment; waiting is working's color, held paler */
+.repo-board [data-status] { --repo-status: var(--text-dim); }
+.repo-board [data-status="blocked"] { --repo-status: var(--status-blocked); }
+.repo-board [data-status="working"] { --repo-status: var(--status-working); }
+.repo-board [data-status="waiting"] { --repo-status: color-mix(in srgb, var(--status-working) 55%, var(--bg-elevated)); }
+.repo-board [data-status="done"] { --repo-status: var(--status-done); }
+.repo-board [data-status="idle"] { --repo-status: var(--status-idle); }
+
+.repo-card-bar > [data-status] { background: var(--repo-status); }

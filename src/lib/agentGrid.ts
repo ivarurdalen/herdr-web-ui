@@ -48,13 +48,16 @@ export const GRID_MAX_COLUMNS = 6;
 export const GRID_MAX_ROWS = 4;
 const MAX_SLOTS = GRID_MAX_COLUMNS * GRID_MAX_ROWS;
 // the views travel in the shared preferences, which the server caps in size
-const MAX_VIEWS = 12;
+export const MAX_VIEWS = 12;
 const MAX_EXCLUDED = 48;
 const MAX_TEXT = 300;
 export const EMPTY_GRID_FILTER: GridFilter = { query: "", repo: null, host: null, herdrSession: null };
 
 const VIEW_KEY = "herdr-web-ui:agent-grid-view";
 const OPEN_KEY = "herdr-web-ui:agent-grid-open";
+
+/** An id for a view made in this browser. */
+export const newViewId = (): string => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 export function newGridView(id: string, name: string): GridView {
   return { id, name, columns: 3, rows: 2, repo: null, host: null, herdrSession: null, slots: [], excluded: [] };
@@ -100,14 +103,14 @@ export function storeGridViewId(id: string): void {
   try { localStorage.setItem(VIEW_KEY, id); } catch { /* per-browser convenience only */ }
 }
 
-/** What takes the pane area's place: the grid, the agent sessions page, or nothing (the pane itself). */
-export type Board = "grid" | "sessions" | null;
+/** What takes the pane area's place: the grid, the agent sessions page, the Repos board, or nothing (the pane itself). */
+export type Board = "grid" | "sessions" | "repos" | null;
 
 /** The grid unless this browser chose otherwise: the grid is what this build is for. */
 export function loadBoard(): Board {
   try {
     const value = localStorage.getItem(OPEN_KEY);
-    return value === "0" ? null : value === "sessions" ? "sessions" : "grid";
+    return value === "0" ? null : value === "sessions" || value === "repos" ? value : "grid";
   } catch {
     return "grid";
   }
@@ -154,10 +157,22 @@ export function fitGrid(count: number): { columns: number; rows: number } {
   return { columns: GRID_MAX_COLUMNS, rows: GRID_MAX_ROWS };
 }
 
-/** The view that shows every agent of `repo`: the one already filtered to it alone, or a new one sized to fit. */
-export function repoView(views: readonly GridView[], repo: string, count: number, id: string): GridView {
-  const existing = views.find((view) => view.repo === repo && view.host === null && view.herdrSession === null);
-  return existing ?? { ...newGridView(id, repo), ...fitGrid(count), repo };
+/** A view filtered to one repo alone with no hand-placed tile: the grid's own repo view, safe to reuse or replace. */
+const isRepoView = (view: GridView): boolean => view.repo !== null && view.host === null && view.herdrSession === null && view.slots.every((slot) => slot === null);
+
+/**
+ * Where a click on `repo` takes the grid. `views` is what the grid shows now. It returns the views
+ * to save and the one to select: the repo's clean view, else a new one sized to fit (replacing the
+ * last clean view of another repo once the saved views are full). Null when nothing fits, so the
+ * grid stays on its current view.
+ */
+export function openRepoView(views: readonly GridView[], repo: string, count: number, id: string): { views: GridView[]; id: string } | null {
+  const existing = views.find((view) => view.repo === repo && isRepoView(view));
+  if (existing) return { views: [...views], id: existing.id };
+  const next: GridView = { ...newGridView(id, repo), ...fitGrid(count), repo };
+  if (views.length < MAX_VIEWS) return { views: [...views, next], id };
+  const index = views.map(isRepoView).lastIndexOf(true);
+  return index < 0 ? null : { views: views.map((view, at) => (at === index ? next : view)), id };
 }
 
 /** The PCs with only the workspaces of the chosen repos (none chosen is all); a PC left with none drops out. */

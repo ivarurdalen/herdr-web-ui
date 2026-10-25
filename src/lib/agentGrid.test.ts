@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import type { Machine } from "../../shared/machines.ts";
 import type { HerdrPane, SessionSnapshot } from "../../shared/protocol.ts";
-import { arrangeView, chooseInView, EMPTY_GRID_FILTER, filterMachinesByRepo, filterView, fitGrid, gridChoices, gridTiles, lastSegment, matchesGridFilter, newGridView, placeInSlot, removeFromView, repoCounts, repoView, sanitizeGridViews } from "./agentGrid.ts";
+import { arrangeView, chooseInView, EMPTY_GRID_FILTER, filterMachinesByRepo, filterView, fitGrid, gridChoices, gridTiles, lastSegment, loadBoard, matchesGridFilter, MAX_VIEWS, newGridView, openRepoView, placeInSlot, removeFromView, repoCounts, sanitizeGridViews, storeBoard, type GridView } from "./agentGrid.ts";
 
 function pane(id: string, overrides: Partial<HerdrPane> = {}): HerdrPane {
   return { pane_id: id, workspace_id: "w1", tab_id: "w1:t1", terminal_id: `${id}:term`, revision: 1, focused: false, agent_status: "idle", agent: "claude", ...overrides };
@@ -70,10 +70,68 @@ describe("repo views", () => {
     expect([0, 1, 2, 4, 6, 7, 10, 13, 20, 30].map((count) => Object.values(fitGrid(count)).join("x"))).toEqual(["1x1", "1x1", "2x1", "2x2", "3x2", "3x3", "4x3", "4x4", "5x4", "6x4"]);
   });
 
-  it("reuses the view filtered to the repo alone, else makes one", () => {
-    const devkit = { ...newGridView("d", "devkit"), repo: "devkit" };
-    expect(repoView([devkit], "devkit", 9, "new")).toBe(devkit);
-    expect(repoView([{ ...devkit, host: "box" }], "devkit", 7, "new")).toMatchObject({ id: "new", name: "devkit", repo: "devkit", columns: 3, rows: 3, slots: [] });
+  describe("openRepoView", () => {
+    const repoOnly = (id: string, repo: string): GridView => ({ ...newGridView(id, repo), repo });
+
+    it("reuses the view filtered to the repo alone, with its size and exclusions", () => {
+      const devkit = { ...repoOnly("d", "devkit"), columns: 5, excluded: ["box:x"] };
+      expect(openRepoView([repoOnly("o", "other"), devkit], "devkit", 9, "new")).toEqual({ views: [repoOnly("o", "other"), devkit], id: "d" });
+    });
+
+    it("skips a view of the repo with a PC, a herdr session or a hand-placed tile, and adds one sized to fit", () => {
+      const devkit = repoOnly("d", "devkit");
+      for (const taken of [{ ...devkit, host: "box" }, { ...devkit, herdrSession: "work" }, { ...devkit, slots: [null, "box:a"] }]) {
+        const result = openRepoView([taken], "devkit", 7, "new");
+        expect(result!.id).toBe("new");
+        expect(result!.views).toEqual([taken, { ...newGridView("new", "devkit"), repo: "devkit", columns: 3, rows: 3 }]);
+      }
+    });
+
+    it("adds a view to an empty list", () => {
+      expect(openRepoView([], "devkit", 1, "new")).toEqual({ views: [{ ...newGridView("new", "devkit"), repo: "devkit", columns: 1, rows: 1 }], id: "new" });
+    });
+
+    it("replaces the last clean view of another repo once the views are full", () => {
+      const full = Array.from({ length: MAX_VIEWS }, (_, index) => repoOnly(`v${index}`, `repo${index}`));
+      full[3] = { ...full[3]!, slots: ["box:a"] };
+      full[MAX_VIEWS - 1] = { ...full[MAX_VIEWS - 1]!, host: "box" };
+      const result = openRepoView(full, "devkit", 2, "new")!;
+      expect(result.id).toBe("new");
+      expect(result.views).toHaveLength(MAX_VIEWS);
+      expect(result.views.map((view) => view.id)).toEqual(full.map((view, index) => (index === MAX_VIEWS - 2 ? "new" : view.id)));
+    });
+
+    it("leaves the grid on its current view when full and no view can be replaced", () => {
+      const full = Array.from({ length: MAX_VIEWS }, (_, index) => ({ ...newGridView(`v${index}`, `View ${index}`) }));
+      expect(openRepoView(full, "devkit", 2, "new")).toBeNull();
+    });
+  });
+
+  describe("the open board", () => {
+    const stored = new Map<string, string>();
+    const local = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+    beforeAll(() => Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem: (key: string) => stored.get(key) ?? null, setItem: (key: string, value: string) => void stored.set(key, value) } }));
+    afterAll(() => { if (local) Object.defineProperty(globalThis, "localStorage", local); else Reflect.deleteProperty(globalThis, "localStorage"); });
+    afterEach(() => stored.clear());
+
+    it("reads back every board it stored", () => {
+      for (const board of ["grid", "sessions", "repos", null] as const) {
+        storeBoard(board);
+        expect(loadBoard()).toBe(board);
+      }
+    });
+
+    it("keeps the meaning of values stored before: 0 is none, 1 and anything else the grid", () => {
+      const keyOf = (value: string): void => void stored.set("herdr-web-ui:agent-grid-open", value);
+      expect(["0", "1", "sessions", "repos", "bogus"].map((value) => (keyOf(value), loadBoard()))).toEqual([null, "grid", "sessions", "repos", "grid"]);
+      stored.clear();
+      expect(loadBoard()).toBe("grid");
+    });
+
+    it("stores the repos board as repos", () => {
+      storeBoard("repos");
+      expect(stored.get("herdr-web-ui:agent-grid-open")).toBe("repos");
+    });
   });
 
   it("keeps only the chosen repos' workspaces in the sidebar, and drops a PC left empty", () => {

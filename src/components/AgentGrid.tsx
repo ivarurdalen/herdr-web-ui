@@ -4,8 +4,8 @@ import type { AgentSessionRecord } from "../../shared/agent-sessions.ts";
 import type { Machine } from "../../shared/machines.ts";
 import { composerMessage, composerPayload } from "../lib/compose.ts";
 import {
-  arrangeView, chooseInView, filterView, GRID_MAX_COLUMNS, GRID_MAX_ROWS, gridChoices, gridTiles, lastSegment, loadGridViewId, matchesGridFilter, newGridView,
-  removeFromView, repoCounts, repoView, storeGridViewId, viewFilter, type GridFilter, type GridTile, type GridView,
+  arrangeView, chooseInView, filterView, GRID_MAX_COLUMNS, GRID_MAX_ROWS, gridChoices, gridTiles, lastSegment, loadGridViewId, matchesGridFilter, newGridView, newViewId,
+  openRepoView, removeFromView, repoCounts, storeGridViewId, viewFilter, type GridFilter, type GridTile, type GridView,
 } from "../lib/agentGrid.ts";
 import { OpenFileContext } from "../lib/filePaths.ts";
 import { useT } from "../lib/i18n.ts";
@@ -45,7 +45,6 @@ function useMachineConnected(connection: MachineSession | null): boolean {
 }
 
 const COUNTS = (max: number) => Array.from({ length: max }, (_, index) => index + 1);
-const newViewId = (): string => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
 function tileTitle({ entry }: GridTile): string {
   return entry.pane.label?.trim() || entry.agent?.title?.trim() || entry.pane.title?.trim() || displayPaneTitle(entry.pane);
@@ -104,8 +103,9 @@ export function AgentGrid({ machines, onOpen }: Props) {
     setPicking(null);
   };
   const openRepo = (repo: string, count: number): void => {
-    const next = repoView(saved.length > 0 ? saved : views, repo, count, newViewId());
-    if (!saved.some((candidate) => candidate.id === next.id)) update({ agentGridViews: [...(saved.length > 0 ? saved : views), next] });
+    const next = openRepoView(saved.length > 0 ? saved : views, repo, count, newViewId());
+    if (next === null) return;
+    if (!saved.some((candidate) => candidate.id === next.id)) update({ agentGridViews: next.views });
     select(next.id);
   };
 

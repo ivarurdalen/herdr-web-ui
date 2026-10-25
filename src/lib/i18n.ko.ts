@@ -331,6 +331,19 @@ const BASE: Record<string, string> = {
   "Linear issues": "Linear 이슈",
   "Open the chat": "채팅 열기",
   "Pull requests": "풀 리퀘스트",
+  "Repos": "저장소",
+  "Working": "작업 중",
+  "Waiting": "대기 중",
+  "Idle": "유휴",
+  "Unknown": "알 수 없음",
+  "{n} repos": "저장소 {n}개",
+  "{n} agents": "에이전트 {n}개",
+  "{n} PCs": "PC {n}대",
+  "{n} workspaces": "워크스페이스 {n}개",
+  "{n} pull requests": "풀 리퀘스트 {n}개",
+  "{n} Linear issues": "Linear 이슈 {n}개",
+  "Open the agent grid on {repo}": "{repo}의 에이전트 그리드 열기",
+  "No agents are running on a connected PC.": "연결된 PC에서 실행 중인 에이전트가 없습니다.",
 };
 
 /** The parts KO is made of; src/lib/i18n.test.ts fails when a key is in two parts, since a spread keeps only the last. */
