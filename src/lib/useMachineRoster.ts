@@ -30,8 +30,30 @@ export function sameData(a: unknown, b: unknown): boolean {
 /** trailing debounce for push-triggered refetches: bursts of events become one fetch */
 const REFETCH_DEBOUNCE_MS = 500;
 
+/**
+ * The roster as the stream and the polls last set it, updated at once: a render lags behind, and
+ * two events in one burst each merge onto the one before.
+ */
+export type RosterSetter = Dispatch<SetStateAction<Machine[]>> & { roster: { current: Machine[] } };
+
+/** The roster after a full or single-PC event; null for a PC the roster does not hold (the next poll repairs that). */
+export function applyRosterEvent(roster: readonly Machine[], event: Extract<MachineEvent, { type: "machines" | "machine" }>): Machine[] | null {
+  if (event.type === "machines") return event.machines;
+  const at = roster.findIndex((machine) => machine.id === event.machine.id);
+  if (at < 0) return null;
+  return roster.map((machine, index) => index === at ? event.machine : machine);
+}
+
 export function useRosterState() {
-  const [machines, setMachines] = useState<Machine[]>([]);
+  const [machines, setState] = useState<Machine[]>([]);
+  const [setMachines] = useState<RosterSetter>(() => {
+    const roster = { current: [] as Machine[] };
+    const set = (action: SetStateAction<Machine[]>): void => {
+      roster.current = typeof action === "function" ? action(roster.current) : action;
+      setState(roster.current);
+    };
+    return Object.assign(set, { roster });
+  });
   const [machineRosterLoaded, setMachineRosterLoaded] = useState(false);
   return { machines, setMachines, machineRosterLoaded, setMachineRosterLoaded };
 }
@@ -69,7 +91,7 @@ export function useRefetchTimer() {
 
 export function useRosterLoader({ rosterIn, setMachines, setMachineRosterLoaded, setError, setLocked, loadHealth, lockedRef, refetchTimer }: {
   rosterIn: () => void;
-  setMachines: Dispatch<SetStateAction<Machine[]>>;
+  setMachines: RosterSetter;
   setMachineRosterLoaded: Dispatch<SetStateAction<boolean>>;
   setError: Dispatch<SetStateAction<string | null>>;
   setLocked: Dispatch<SetStateAction<boolean | null>>;
@@ -153,7 +175,7 @@ export function useRosterEvents({ locked, receivePreferencesRef, snapshotRequest
   snapshotRequests: RefObject<SnapshotRequests>;
   onRoster: ReturnType<typeof useAlertSignals>["onRoster"];
   reorderCoordinator: ReorderCoordinator;
-  setMachines: Dispatch<SetStateAction<Machine[]>>;
+  setMachines: RosterSetter;
   rosterIn: () => void;
   setMachineRosterLoaded: Dispatch<SetStateAction<boolean>>;
   machinesRef: RefObject<Machine[]>;
@@ -189,10 +211,12 @@ export function useRosterEvents({ locked, receivePreferencesRef, snapshotRequest
       if (payload.type === "seen") { receiveSeen(payload.finishes); return; }
       // A poll started before this event can carry an older roster or pane status.
       snapshotRequests.current.invalidate();
-      if (payload.type === "machines") {
-        onRoster(payload.machines);
-        reorderCoordinator.roster(payload.machines, { kind: "event" });
-        setMachines((previous) => sameData(previous, payload.machines) ? previous : payload.machines);
+      if (payload.type === "machines" || payload.type === "machine") {
+        const roster = applyRosterEvent(setMachines.roster.current, payload);
+        if (!roster) return;
+        onRoster(roster);
+        reorderCoordinator.roster(roster, { kind: "event" });
+        setMachines((previous) => sameData(previous, roster) ? previous : roster);
         rosterIn();
         setMachineRosterLoaded(true);
         return;

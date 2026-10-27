@@ -49,7 +49,7 @@ export function machineSightings(machine: Machine, known: ReadonlySet<string>): 
 }
 
 export interface IngestSource {
-  subscribe(listener: (event: { type: string; machines?: Machine[] }) => void): () => void;
+  subscribe(listener: (event: { type: string; machines?: Machine[]; machine?: Machine }) => void): () => void;
 }
 
 /** Looks up a workspace's branch on its PC; null when it is no git checkout or the PC does not answer. */
@@ -101,8 +101,9 @@ export function startAgentSessionIngest(store: AgentSessionStore, source: Ingest
   };
 
   const unsubscribe = source.subscribe((event) => {
-    if (event.type !== "machines" || !event.machines) return;
-    latest = event.machines;
+    if (event.type === "machines" && event.machines) latest = event.machines;
+    else if (event.type === "machine" && event.machine) latest = latest.map((machine) => machine.id === event.machine!.id ? event.machine! : machine);
+    else return;
     if (running) dirty = true;
     else schedule();
   });

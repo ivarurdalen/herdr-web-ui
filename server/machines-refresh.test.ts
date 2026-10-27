@@ -9,6 +9,7 @@ import { CompletionTracker } from "./completion.ts";
 import { handleMachineRequest } from "./machine-api.ts";
 import { bridgeAgentNews, MachineManager, SOURCE_CHECK_INTERVAL_MS } from "./machines.ts";
 import type { PushService } from "./push.ts";
+import { subscribeRoster } from "./roster-subscription.ts";
 import { REMOTE_LIMITS, RemoteResponseTooLarge } from "./remote-json.ts";
 
 const cleanups: (() => void)[] = [];
@@ -119,8 +120,9 @@ async function fixture(options: { bootId?: string; now?: () => number } = {}) {
     disconnect(runtime: TestRuntime): void;
   };
   const rosters: string[] = [];
-  manager.subscribe((event) => {
-    if (event.type === "machines") for (const machine of event.machines) {
+  // a PC that changed arrives alone: its row is the only new entry
+  subscribeRoster(manager, (machines, event) => {
+    for (const machine of event.type === "machine" ? [event.machine] : machines) {
       const status = machine.snapshot?.panes[0]?.agent_status;
       if (status) rosters.push(`${machine.id}:${status}`);
     }
@@ -384,7 +386,7 @@ describe("machine snapshot refresh races", () => {
   });
 
   it("preserves a streamed remote snapshot received during an HTTP load", async () => {
-    const { drive, rosters, remote, runtime, send } = await remoteFixture();
+    const { manager, drive, rosters, remote, runtime, send } = await remoteFixture();
     remote.hold();
     const loading = drive.refresh(runtime);
     await until(() => remote.waiting() === 1);
@@ -398,7 +400,9 @@ describe("machine snapshot refresh races", () => {
     expect(remote.calls()).toBe(3);
     remote.answer();
     await loading;
-    expect(rosters).toEqual(["local:working", "remote:blocked"]);
+    // the streamed status was already published and the HTTP read added nothing, so nothing is sent again
+    expect(rosters).toEqual([]);
+    expect(manager.list().map((machine) => `${machine.id}:${machine.snapshot?.panes[0]?.agent_status}`)).toEqual(["local:working", "remote:blocked"]);
   });
 
   for (const event of ["pane-status", "snapshot"] as const) {
@@ -655,15 +659,14 @@ function gatedHealth() {
 /** the next roster the manager publishes that `check` accepts */
 function published(manager: MachineManager, check: (machines: Machine[]) => boolean): Promise<Machine[]> {
   return new Promise((resolve) => {
-    const stop = manager.subscribe((event) => { if (event.type === "machines" && check(event.machines)) { stop(); resolve(event.machines); } });
+    const stop = subscribeRoster(manager, (machines) => { if (check(machines)) { stop(); resolve(machines); } });
   });
 }
 /** every remote pair the manager publishes, in order */
 function remotePairs(manager: MachineManager): string[] {
   const pairs: string[] = [];
-  manager.subscribe((event) => {
-    if (event.type !== "machines") return;
-    const snap = event.machines.find((machine) => machine.id === "remote")?.snapshot;
+  subscribeRoster(manager, (machines) => {
+    const snap = machines.find((machine) => machine.id === "remote")?.snapshot;
     if (snap?.order_epoch) pairs.push(`${snap.order_epoch}:${snap.read_seq}`);
   });
   return pairs;

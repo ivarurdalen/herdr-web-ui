@@ -43,7 +43,11 @@ it("carries a plugin's pane tokens and agent line to the browsers' roster, live,
         await Bun.sleep(25);
       }
     };
-    const pane = (event: MachineEvent) => event.type === "machines" ? event.machines[0]?.snapshot?.panes.find((candidate) => candidate.pane_id === paneId) : undefined;
+    // a changed PC arrives alone as a machine event; the first PC of the roster is the local one
+    const pane = (event: MachineEvent) => {
+      const machine = event.type === "machines" ? event.machines[0] : event.type === "machine" ? event.machine : undefined;
+      return machine?.id === "local" ? machine.snapshot?.panes.find((candidate) => candidate.pane_id === paneId) : undefined;
+    };
 
     await waitFor("herdr's agent rows", (event) => event.type === "herdr-sidebar" && JSON.stringify(event.agents) === JSON.stringify({ rows: [{ name: "quota" }], by_agent: {} }));
     await waitFor("the pane in the roster", (event) => pane(event)?.agent === "claude");

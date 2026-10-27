@@ -139,6 +139,17 @@ describe("ingest and routes", () => {
     expect(store.list()).toMatchObject([{ agent_session_id: "abc-1", branch: "feat/grok", resume_command: "cd /w/devkit && claude --resume abc-1" }]);
   });
 
+  it("takes a single changed PC from a machine event without another full roster", async () => {
+    const store = new AgentSessionStore(":memory:");
+    let listener: ((event: { type: string; machines?: Machine[]; machine?: Machine }) => void) | null = null;
+    const stop = startAgentSessionIngest(store, { subscribe: (next) => { listener = next; return () => {}; } }, async () => "feat/grok");
+    listener!({ type: "machines", machines: [{ ...machine, snapshot: null } as Machine] });
+    listener!({ type: "machine", machine });
+    for (let tries = 0; tries < 50 && store.list().length === 0; tries++) await Bun.sleep(10);
+    stop();
+    expect(store.list()).toMatchObject([{ agent_session_id: "abc-1", branch: "feat/grok" }]);
+  });
+
   it("suggests the branch's pull request and the Linear id its title starts with", async () => {
     const store = new AgentSessionStore(":memory:");
     store.observe("box", [sighting("a", { branch: "feat/grok" })], at(0));

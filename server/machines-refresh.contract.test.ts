@@ -10,6 +10,7 @@ import { handleMachineRequest } from "./machine-api.ts";
 import { createServer } from "./index.ts";
 import { MachineManager } from "./machines.ts";
 import { createPushService } from "./push.ts";
+import { subscribeRoster } from "./roster-subscription.ts";
 
 describe("slow structural roster refreshes", () => {
   for (const remote of [false, true]) {
@@ -29,8 +30,8 @@ describe("slow structural roster refreshes", () => {
       try {
         const ready = Promise.withResolvers<void>();
         manager = new MachineManager(root, createPushService({ stateDir: root }), new CompletionTracker(null), remote ? sessionSnapshot : read);
-        const unsubscribe = manager.subscribe((event) => {
-          if (event.type === "machines" && event.machines[0]?.state === "connected") ready.resolve();
+        const unsubscribe = subscribeRoster(manager, (machines) => {
+          if (machines[0]?.state === "connected") ready.resolve();
         });
         await ready.promise;
         unsubscribe();
@@ -70,14 +71,6 @@ describe("slow structural roster refreshes", () => {
           if (!response) throw new Error("held roster missing");
           pending = undefined;
           started = Promise.withResolvers<void>();
-          let publishedRoster = false;
-          const stopListening = manager.subscribe((event) => {
-            if (event.type !== "machines") return;
-            const snapshot = remote ? runtime.machine.snapshot : event.machines[0]?.snapshot;
-            if (snapshot?.workspaces.some((item) => item.workspace_id === workspace.workspace.workspace_id)) publishedRoster = true;
-          });
-          // subscribe() sends the current roster synchronously; only the held load counts.
-          publishedRoster = false;
           // Structural invalidations only queue another read; they must not obsolete this one.
           if (remote) {
             const invalidated = Promise.withResolvers<void>();
@@ -93,8 +86,9 @@ describe("slow structural roster refreshes", () => {
           response.resolve(response.snapshot);
           // The next read starts whether or not the previous response was published.
           await nextRead;
-          stopListening();
-          expect(publishedRoster).toBe(true);
+          // An unchanged roster is not sent again, so what the load published is read from the roster itself.
+          const rostered = (remote ? runtime.machine : manager.list()[0])?.snapshot;
+          expect(rostered?.workspaces.some((item) => item.workspace_id === workspace.workspace.workspace_id)).toBe(true);
         }
         held = false;
         if (!pending) throw new Error("follow-up roster missing");
@@ -132,8 +126,8 @@ describe("workspace order evidence across a real bridge", () => {
       runtime.ssh = { close() {} };
       drive.machines.set("remote", runtime);
       const remoteWhere = (check: (machine: Machine) => boolean) => new Promise<Machine>((resolve) => {
-        const stop = manager.subscribe((event) => {
-          const machine = event.type === "machines" ? event.machines.find((item) => item.id === "remote") : undefined;
+        const stop = subscribeRoster(manager, (machines) => {
+          const machine = machines.find((item) => item.id === "remote");
           if (machine && check(machine)) { queueMicrotask(stop); resolve(machine); }
         });
       });

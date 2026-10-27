@@ -188,6 +188,8 @@ export class MachineManager {
   private autoChain: Promise<void> = Promise.resolve();
   private autoQueued = new Set<string>();
   private emitTimer?: ReturnType<typeof setTimeout>;
+  /** a copy of the roster last sent: PC objects change in place, so only a copy shows what changed */
+  private sentRoster: Machine[] | null = null;
   /** this server's own boot id: the local PC's proof, without asking anyone */
   private bootId?: string;
   /** a monotonic clock for the health calls' start interval; tests pass their own */
@@ -339,7 +341,16 @@ export class MachineManager {
   }
   private emit(event?: MachineEvent): void {
     if (this.stopped) return;
-    for (const listener of this.listeners) listener(event ?? { type: "machines", machines: this.list() });
+    if (event) { for (const listener of this.listeners) listener(event); return; }
+    // The 5 s remote polls call this with nothing new: only what differs from the last send goes out.
+    const machines = this.list();
+    const sent = this.sentRoster;
+    const events: MachineEvent[] = !sent || sent.length !== machines.length || machines.some((machine, index) => machine.id !== sent[index]!.id)
+      ? [{ type: "machines", machines }]
+      : machines.flatMap((machine, index): MachineEvent[] => Bun.deepEquals(machine, sent[index]) ? [] : [{ type: "machine", machine }]);
+    if (events.length === 0) return;
+    this.sentRoster = structuredClone(machines);
+    for (const item of events) for (const listener of this.listeners) listener(item);
   }
   localMessage(message: ServerMessage): void {
     // Structural invalidations queue a follow-up below without discarding the
