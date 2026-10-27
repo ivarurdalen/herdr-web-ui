@@ -61,7 +61,6 @@ export function startAgentSessionIngest(store: AgentSessionStore, source: Ingest
   let running = false;
   let lastRun = 0;
   let stopped = false;
-  let dirty = false;
   const branches = new Map<string, { branch: string | null; at: number }>();
 
   const branchFor = async (machineId: string, workspace: WorkspaceInfo): Promise<string | null> => {
@@ -77,7 +76,6 @@ export function startAgentSessionIngest(store: AgentSessionStore, source: Ingest
     timer = null;
     if (running || stopped) return;
     running = true;
-    dirty = false;
     lastRun = Date.now();
     try {
       const machines = latest.filter((machine) => machine.state === "connected" && machine.snapshot);
@@ -93,7 +91,8 @@ export function startAgentSessionIngest(store: AgentSessionStore, source: Ingest
       console.error(`agent sessions: the record was not updated (${error instanceof Error ? error.message : String(error)})`);
     } finally {
       running = false;
-      if (dirty) schedule();
+      // also without a roster change: an unchanged roster sends no event, and sightings and branches still age
+      schedule();
     }
   };
   const schedule = (): void => {
@@ -104,8 +103,7 @@ export function startAgentSessionIngest(store: AgentSessionStore, source: Ingest
     if (event.type === "machines" && event.machines) latest = event.machines;
     else if (event.type === "machine" && event.machine) latest = latest.map((machine) => machine.id === event.machine!.id ? event.machine! : machine);
     else return;
-    if (running) dirty = true;
-    else schedule();
+    schedule();
   });
   return () => {
     stopped = true;

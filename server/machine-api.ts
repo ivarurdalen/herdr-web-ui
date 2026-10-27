@@ -11,6 +11,9 @@ import { isJsonObject, jsonResponse, setRequestRoute } from "./http.ts";
 import { crossSiteFileRead } from "./file-view.ts";
 import { parseJson, readCapped, REMOTE_LIMITS, RemoteResponseInvalid, RemoteResponseTooLarge } from "./remote-json.ts";
 
+/** Event text a gzipped stream may hold uncompressed before its reader counts as stalled. */
+const GZIP_PENDING_BYTES = 4 * 1024 * 1024;
+
 const fail = (code: string, message: string, status: number) => jsonResponse({ error: { code, message } }, status);
 
 /**
@@ -107,11 +110,16 @@ export async function handleMachineRequest(request: Request, manager: MachineMan
           close = () => { if (closed) return; closed = true; cleanup(); try { controller.close(); } catch {} };
           unwatchDevice = onRevoke?.(close);
           if (closed) return;
-          const enqueue = (chunk: Uint8Array) => { if (closed) return; try { controller.enqueue(chunk); } catch { close(); } };
+          const enqueue = (chunk: Uint8Array) => {
+            if (closed) return;
+            if ((controller.desiredSize ?? 0) < -4) { close(); return; }
+            try { controller.enqueue(chunk); } catch { close(); }
+          };
           gzip?.on("data", enqueue).on("error", close);
           const send = (text: string) => {
             if (closed) return;
-            if ((controller.desiredSize ?? 0) < -4) { close(); return; }
+            // zlib compresses later: a burst sent in one tick queues there before desiredSize moves
+            if ((controller.desiredSize ?? 0) < -4 || (gzip?.writableLength ?? 0) > GZIP_PENDING_BYTES) { close(); return; }
             try {
               if (gzip) { gzip.write(text); gzip.flush(constants.Z_SYNC_FLUSH); } else controller.enqueue(encoder.encode(text));
             } catch { close(); }

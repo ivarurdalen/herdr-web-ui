@@ -142,6 +142,16 @@ describe("the event stream's gzip", () => {
     expect(listeners.size).toBe(0);
   });
 
+  it("closes on a burst sent in one tick, before zlib has compressed any of it", async () => {
+    const { manager, listeners, emit } = fakeManager();
+    heldHeartbeat();
+    const response = await handleMachineRequest(events("gzip"), manager);
+    const big = (n: number): MachineEvent => ({ type: "machines", machines: [{ id: `pc-${n}`, pad: crypto.getRandomValues(new Uint8Array(64 * 1024)).join(",") }] } as unknown as MachineEvent);
+    for (let i = 0; i < 100 && listeners.size > 0; i++) emit(big(i));
+    expect(listeners.size).toBe(0);
+    await response.body!.cancel().catch(() => undefined);
+  });
+
   it("closes a reader that stops reading instead of buffering without bound", async () => {
     const { manager, listeners, emit } = fakeManager();
     heldHeartbeat();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock, spyOn } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +8,8 @@ import type { Machine } from "../shared/machines.ts";
 import { machineSightings, startAgentSessionIngest } from "./agent-session-ingest.ts";
 import { handleAgentSessionRequest, suggestLinks } from "./agent-session-routes.ts";
 import { AgentSessionStore, type AgentSessionSighting } from "./agent-sessions.ts";
+
+afterEach(() => mock.restore());
 
 function sighting(id: string, overrides: Partial<AgentSessionSighting> = {}): AgentSessionSighting {
   return {
@@ -148,6 +150,24 @@ describe("ingest and routes", () => {
     for (let tries = 0; tries < 50 && store.list().length === 0; tries++) await Bun.sleep(10);
     stop();
     expect(store.list()).toMatchObject([{ agent_session_id: "abc-1", branch: "feat/grok" }]);
+  });
+
+  it("records again on its own interval while the roster stays unchanged", async () => {
+    const store = new AgentSessionStore(":memory:");
+    let listener: ((event: { type: string; machines?: Machine[] }) => void) | null = null;
+    const runs: unknown[] = [];
+    const timers: Array<() => void> = [];
+    spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void) => { timers.push(fn); return timers.length as unknown as ReturnType<typeof setTimeout>; }) as unknown as typeof setTimeout);
+    const stop = startAgentSessionIngest(store, { subscribe: (next) => { listener = next; return () => {}; } }, async () => { runs.push(1); return "feat/grok"; });
+    listener!({ type: "machines", machines: [machine] });
+    for (let pass = 0; pass < 3; pass++) {
+      expect(timers.length).toBe(pass + 1);
+      timers[pass]!();
+      for (let tries = 0; tries < 50 && timers.length === pass + 1; tries++) await Bun.sleep(1);
+    }
+    stop();
+    expect(timers.length).toBe(4);
+    expect(store.list()).toHaveLength(1);
   });
 
   it("suggests the branch's pull request and the Linear id its title starts with", async () => {
