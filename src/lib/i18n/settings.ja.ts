@@ -67,7 +67,7 @@ export const SETTINGS_JA: Record<string, string> = {
   "When on, use Send or hardware Mod+Enter to send.": "オンの場合は送信ボタン、またはハードウェアキーボードの Mod+Enter で送信します。",
   "When off, Mod+Enter sends": "オフの場合は Mod+Enter で送信します",
   "Panes open in": "ペインを開く表示",
-  "Every pane on this device. Switching a pane's lens keeps it there until this changes. Auto: chat for an agent on a touch screen, else the terminal.": "この端末のすべてのペインに適用されます。ペインで表示を切り替えると、この設定を変えるまでその表示で開きます。自動: タッチ画面のエージェントはチャット、それ以外はターミナル。",
+  "Every pane on this device. Switching a pane's lens keeps it there until this changes. Auto: chat for an agent, the terminal for a shell.": "この端末のすべてのペインに適用されます。ペインで表示を切り替えると、この設定を変えるまでその表示で開きます。自動: エージェントはチャット、シェルはターミナル。",
   "Auto": "自動",
   "Show thinking": "思考を表示",
   "Include the agent's reasoning blocks": "エージェントの推論ブロックも表示します",

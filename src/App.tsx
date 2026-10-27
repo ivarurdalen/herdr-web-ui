@@ -397,7 +397,7 @@ export function App() {
         setSessionHistory({ machineId: found.machineId, workspaceId: found.workspace.workspace_id, agent, paneId, askingPaneId, selectedPaneId: selected });
       },
       openPalette,
-      agentStarted: (machineId, paneId) => lenses.startedAgent(paneStorageId(machineId, paneId), window.matchMedia?.("(pointer: coarse)").matches === true),
+      agentStarted: (machineId, paneId) => lenses.startedAgent(paneStorageId(machineId, paneId)),
       openFind: () => {
         if (selectedPaneId === null) return;
         // a peek already shows the pane's terminal: find searches it there, and the peek (its return,

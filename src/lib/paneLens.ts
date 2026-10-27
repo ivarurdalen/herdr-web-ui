@@ -2,15 +2,13 @@ import type { PaneView } from "./actions.ts";
 import type { DefaultView } from "./settings.ts";
 
 /**
- * The lens a pane opens in when nobody picked one for it: Settings' default for every pane
- * (chat needs an agent, a shell has no conversation to show), or, on Auto, the chat for an
- * agent pane on a touch screen. Until the snapshot says whether the pane has an agent (null),
- * it counts as one.
+ * The lens a pane opens in when nobody picked one for it: the terminal when Settings says so,
+ * otherwise the chat for an agent pane on every device (a shell has no conversation to show).
+ * Until the snapshot says whether the pane has an agent (null), it counts as one.
  */
-export function defaultLens(hasAgent: boolean | null, defaultView: DefaultView, coarse: boolean): PaneView {
-  if (defaultView === "chat") return hasAgent !== false ? "chat" : "terminal";
+export function defaultLens(hasAgent: boolean | null, defaultView: DefaultView): PaneView {
   if (defaultView === "terminal") return "terminal";
-  return hasAgent !== false && coarse ? "chat" : "terminal";
+  return hasAgent !== false ? "chat" : "terminal";
 }
 
 /**
@@ -24,16 +22,16 @@ export class PaneLenses {
   private readonly settled = new Map<string, PaneView>();
   constructor(private readonly defaultView: DefaultView) {}
 
-  of(key: string, hasAgent: boolean | null, coarse: boolean): PaneView {
+  of(key: string, hasAgent: boolean | null): PaneView {
     const settled = this.settled.get(key);
     if (settled !== undefined) return settled;
-    const lens = defaultLens(hasAgent, this.defaultView, coarse);
+    const lens = defaultLens(hasAgent, this.defaultView);
     if (hasAgent !== null) this.settled.set(key, lens);
     return lens;
   }
 
   /** A pane this page started an agent in: its lens is an agent's, whatever the first snapshot says. */
-  startedAgent(key: string, coarse: boolean): void {
-    this.settled.set(key, defaultLens(true, this.defaultView, coarse));
+  startedAgent(key: string): void {
+    this.settled.set(key, defaultLens(true, this.defaultView));
   }
 }

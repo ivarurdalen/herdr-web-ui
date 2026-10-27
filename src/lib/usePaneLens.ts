@@ -27,7 +27,7 @@ export function storedView(lenses: PaneLenses, picks: ReadonlyMap<string, PaneVi
   } catch {
     /* private mode */
   }
-  return lenses.of(key, hasAgent, window.matchMedia?.("(pointer: coarse)").matches === true);
+  return lenses.of(key, hasAgent);
 }
 
 export function usePaneLensState() {

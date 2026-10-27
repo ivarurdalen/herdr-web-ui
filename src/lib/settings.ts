@@ -54,7 +54,7 @@ export const DICTATION_LANGUAGES = [
   "sk-SK", "sv-SE", "th-TH", "tr-TR", "uk-UA", "vi-VN", "zh-CN", "zh-TW",
 ] as const;
 export type DictationLanguage = "auto" | (typeof DICTATION_LANGUAGES)[number];
-/** the lens a pane opens in until it is switched there: auto is chat for an agent on a touch screen, else terminal */
+/** the lens a pane opens in until it is switched there: auto and chat open an agent pane in the chat, a shell in the terminal */
 export type DefaultView = "auto" | "chat" | "terminal";
 import { sanitizeShortcutOverrides, type ShortcutOverrides } from "./shortcutBindings.ts";
 import type { StatusIndicators } from "./status.ts";

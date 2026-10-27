@@ -350,7 +350,7 @@ function ChatPage() {
   return (
     <>
       <SettingsGroup>
-        <SettingsRow label={t("Panes open in")} description={t("Every pane on this device. Switching a pane's lens keeps it there until this changes. Auto: chat for an agent on a touch screen, else the terminal.")} wide>
+        <SettingsRow label={t("Panes open in")} description={t("Every pane on this device. Switching a pane's lens keeps it there until this changes. Auto: chat for an agent, the terminal for a shell.")} wide>
           <Segmented label={t("Panes open in")} value={settings.defaultView} options={[{ value: "auto", label: t("Auto") }, { value: "chat", label: t("Chat") }, { value: "terminal", label: t("Terminal") }]} onChange={(defaultView) => {
             if (settings.defaultView === defaultView) return;
             // one choice for every pane: what each one remembered gives way to it
