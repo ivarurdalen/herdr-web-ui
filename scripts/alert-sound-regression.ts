@@ -80,6 +80,7 @@ export async function checkAlertSound(browser: Browser, origin: string): Promise
           this.addEventListener("message", (event) => {
             const payload = JSON.parse(event.data);
             if (payload.type === "machines") roster = payload;
+            if (payload.type === "machine" && roster) roster = { ...roster, machines: roster.machines.map((machine) => machine.id === payload.machine.id ? payload.machine : machine) };
             const message = payload.message;
             if (message?.type === "pane-status") {
               statuses[message.pane_id] = message.agent_status;

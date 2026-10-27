@@ -560,10 +560,11 @@ try {
   // PC) carries the plan too, or that frame would take the chip away between waitFor and click
   await page.evaluate(([pane, plan]) => {
     (window as unknown as { __rewriteMachinesFrame?: (data: string) => string }).__rewriteMachinesFrame = (data) => {
-      let payload: { type?: string; machines?: { snapshot?: { panes: { pane_id: string }[] } }[] };
+      type Framed = { snapshot?: { panes: { pane_id: string }[] } };
+      let payload: { type?: string; machines?: Framed[]; machine?: Framed };
       try { payload = JSON.parse(data); } catch { return data; }
-      if (payload.type !== "machines") return data;
-      for (const machine of payload.machines ?? []) for (const p of machine.snapshot?.panes ?? []) if (p.pane_id === pane) Object.assign(p, { plan });
+      if (payload.type !== "machines" && payload.type !== "machine") return data;
+      for (const machine of payload.machines ?? (payload.machine ? [payload.machine] : [])) for (const p of machine.snapshot?.panes ?? []) if (p.pane_id === pane) Object.assign(p, { plan });
       return JSON.stringify(payload);
     };
   }, [paneA, { done: 1, total: 4, current: "Writing the parser" }] as const);

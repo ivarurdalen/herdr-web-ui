@@ -4337,8 +4337,10 @@ describe("workspace order evidence", () => {
           const frame = buffer.slice(0, end); buffer = buffer.slice(end + 2);
           const data = frame.split("\n").filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("");
           if (!data) continue;
-          const event = JSON.parse(data) as { type: string; machines?: { id: string; snapshot: SessionSnapshot | null }[] };
-          const local = event.type === "machines" ? event.machines?.find((machine) => machine.id === "local")?.snapshot : null;
+          type StreamedMachine = { id: string; snapshot: SessionSnapshot | null };
+          const event = JSON.parse(data) as { type: string; machines?: StreamedMachine[]; machine?: StreamedMachine };
+          const local = event.type === "machines" ? event.machines?.find((machine) => machine.id === "local")?.snapshot
+            : event.type === "machine" && event.machine?.id === "local" ? event.machine.snapshot : null;
           if (local && check(local)) return local;
         }
       }

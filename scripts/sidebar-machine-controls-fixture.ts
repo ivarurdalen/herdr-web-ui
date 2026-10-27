@@ -56,6 +56,7 @@ export const MACHINE_CONTROLS_FIXTURE_SCRIPT = String.raw`(() => {
       try {
         const payload = JSON.parse(event.data);
         if (payload.type === "machines") frames.push(payload.machines);
+        else if (payload.type === "machine" && frames.length) frames.push(frames.at(-1).map((machine) => machine.id === payload.machine.id ? payload.machine : machine));
       } catch { /* the demo can also send other event types */ }
     };
     observers.push({ source, frames });
@@ -144,6 +145,7 @@ export const MACHINE_CONTROLS_FIXTURE_SCRIPT = String.raw`(() => {
       this.inner.onmessage = (event) => {
         let payload;
         try { payload = JSON.parse(event.data); } catch { send(this, event); return; }
+        if (payload.type === "machine") payload = { type: "machines", machines: demoMachines.map((machine) => machine.id === payload.machine.id ? payload.machine : machine) };
         if (payload.type === "machines") {
           demoMachines = payload.machines.filter((machine) => machine.id !== "sidebar-fixture" && machine.id !== managed.id);
           payload = rosterEvent();
