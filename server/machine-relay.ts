@@ -4,6 +4,9 @@ import { OUTPUT_HARD_BYTES, OUTPUT_HIGH_BYTES, OUTPUT_STALL_MS } from "./output-
 import { OUTPUT_STALLED_CLOSE_CODE } from "../shared/terminal-flow.ts";
 import type { MachineManager } from "./machines.ts";
 
+/** Smaller frames cost more to deflate than they save; Bun compresses a frame only when `send` is told to. */
+export const COMPRESS_MIN_BYTES = 128;
+
 /**
  * The relay's backstop against its own sockets backing up, with this PC's rule (reconcileOutput):
  * blocked only while OUTPUT_HIGH_BYTES or more is queued, closed after OUTPUT_STALL_MS of that.
@@ -81,8 +84,9 @@ export class MachineRelay {
   }
   private send(raw: string): void {
     if (this.closed || !this.client) return;
-    if (this.client.getBufferedAmount() + Buffer.byteLength(raw) > OUTPUT_HARD_BYTES) { this.close(OUTPUT_STALLED_CLOSE_CODE, "output overflow"); return; }
-    if (this.client.send(raw) === 0) this.close(OUTPUT_STALLED_CLOSE_CODE, "output delivery failed");
+    const bytes = Buffer.byteLength(raw);
+    if (this.client.getBufferedAmount() + bytes > OUTPUT_HARD_BYTES) { this.close(OUTPUT_STALLED_CLOSE_CODE, "output overflow"); return; }
+    if (this.client.send(raw, bytes >= COMPRESS_MIN_BYTES) === 0) this.close(OUTPUT_STALLED_CLOSE_CODE, "output delivery failed");
   }
   message(raw: string | Buffer): void {
     if (this.closed) return;

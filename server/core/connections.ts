@@ -8,7 +8,7 @@ import type { ClientRole, ServerMessage } from "../../shared/protocol.ts";
 import { OUTPUT_STALLED_CLOSE_CODE } from "../../shared/terminal-flow.ts";
 import type { DeviceStore } from "../devices.ts";
 import { HerdrError, herdrSocketPath } from "../herdr/client.ts";
-import type { MachineRelay } from "../machine-relay.ts";
+import { COMPRESS_MIN_BYTES, type MachineRelay } from "../machine-relay.ts";
 import { OUTPUT_HARD_BYTES, type OutputWindow } from "../output-window.ts";
 import type { PendingInputs } from "../pending-input.ts";
 import { PaneWatch } from "../watch.ts";
@@ -77,12 +77,13 @@ export function send(client: Client, message: ServerMessage): number {
     const encoded = JSON.stringify(message);
     // Include JSON escaping in the transport budget, before Bun could drop a
     // frame at its own cap. An overload close is explicit and never auto-replayed.
-    if (client.getBufferedAmount() + Buffer.byteLength(encoded) > OUTPUT_HARD_BYTES) {
+    const bytes = Buffer.byteLength(encoded);
+    if (client.getBufferedAmount() + bytes > OUTPUT_HARD_BYTES) {
       client.close(OUTPUT_STALLED_CLOSE_CODE, "terminal output transport stalled");
       return 0;
     }
     // -1 means ALREADY queued. Never retry that frame, or terminal bytes repeat.
-    const result = client.send(encoded);
+    const result = client.send(encoded, bytes >= COMPRESS_MIN_BYTES);
     if (result === 0) client.close(OUTPUT_STALLED_CLOSE_CODE, "output delivery failed");
     return result;
   } catch {

@@ -91,6 +91,8 @@ export function createSocket({ clients, present, stopped, admit, setRole, watchP
     // This transport cap also covers clients that predate application ACKs.
     backpressureLimit: OUTPUT_HARD_BYTES,
     closeOnBackpressureLimit: true,
+    // each send() opts in by size; a small window keeps the memory per connection low
+    perMessageDeflate: { compress: "32KB" },
     drain(client) {
       drainOutput(client);
     },

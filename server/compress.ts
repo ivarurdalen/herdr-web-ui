@@ -23,7 +23,7 @@ const kept = new Map<string, Uint8Array<ArrayBuffer>>();
 let keptBytes = 0;
 
 /** Whether Accept-Encoding takes gzip: named (or `*`) with a quality above 0, a named gzip outranking `*`. */
-function acceptsGzip(request: Request): boolean {
+export function acceptsGzip(request: Request): boolean {
   let gzip: number | null = null;
   let any: number | null = null;
   for (const part of (request.headers.get("accept-encoding") ?? "").split(",")) {

@@ -1,8 +1,10 @@
+import { constants, createGzip } from "node:zlib";
 import type { MachineEvent, MachineRoster, SetupAction, SetupRequest } from "../shared/machines.ts";
 import type { AgentRowTokens } from "../shared/pane-tokens.ts";
 import type { SharedPreferences } from "../shared/preferences.ts";
 import type { PanePromptResponse } from "../shared/protocol.ts";
 import type { SeenFinish } from "../shared/seen.ts";
+import { acceptsGzip } from "./compress.ts";
 import { MachineManager } from "./machines.ts";
 import { canSendSecret, sameOrigin } from "./machine-security.ts";
 import { isJsonObject, jsonResponse, setRequestRoute } from "./http.ts";
@@ -92,8 +94,10 @@ export async function handleMachineRequest(request: Request, manager: MachineMan
       let unwatchDevice: (() => void) | undefined;
       let heartbeat: ReturnType<typeof setInterval> | undefined;
       let close = () => {};
+      // flushed after every write, so each event decodes as it is sent: this stream never ends on its own
+      const gzip = acceptsGzip(request) ? createGzip() : undefined;
       const cleanup = () => {
-        stop?.(); stopPreferences?.(); stopSidebar?.(); stopSeen?.(); unwatchDevice?.(); clearInterval(heartbeat);
+        stop?.(); stopPreferences?.(); stopSidebar?.(); stopSeen?.(); unwatchDevice?.(); clearInterval(heartbeat); gzip?.destroy();
         request.signal.removeEventListener("abort", close);
       };
       const encoder = new TextEncoder();
@@ -103,7 +107,15 @@ export async function handleMachineRequest(request: Request, manager: MachineMan
           close = () => { if (closed) return; closed = true; cleanup(); try { controller.close(); } catch {} };
           unwatchDevice = onRevoke?.(close);
           if (closed) return;
-          const send = (text: string) => { if (closed) return; if ((controller.desiredSize ?? 0) < -4) { close(); return; } try { controller.enqueue(encoder.encode(text)); } catch { close(); } };
+          const enqueue = (chunk: Uint8Array) => { if (closed) return; try { controller.enqueue(chunk); } catch { close(); } };
+          gzip?.on("data", enqueue).on("error", close);
+          const send = (text: string) => {
+            if (closed) return;
+            if ((controller.desiredSize ?? 0) < -4) { close(); return; }
+            try {
+              if (gzip) { gzip.write(text); gzip.flush(constants.Z_SYNC_FLUSH); } else controller.enqueue(encoder.encode(text));
+            } catch { close(); }
+          };
           stop = manager.subscribe((event) => send(`data: ${JSON.stringify(event)}\n\n`));
           // the shared preferences ride the same stream, one connection per browser; the document
           // opens it, so a page that reconnects (or whose GET lost a race) holds the latest
@@ -125,7 +137,7 @@ export async function handleMachineRequest(request: Request, manager: MachineMan
         },
         cancel() { close(); },
       });
-      return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" } });
+      return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no", ...(gzip ? { "content-encoding": "gzip", vary: "accept-encoding" } : {}) } });
     }
     if (parts[0] === "setup") {
       if (parts.length === 1 && request.method === "POST") { setRequestRoute("/api/machines/setup"); return jsonResponse(manager.setup(await request.json() as SetupRequest), 202); }

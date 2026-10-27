@@ -84,3 +84,16 @@ it("counts each change of role, and a read-only connection only watches", () => 
   expect(connectionOf(watcher.client).mode).toBe("observe");
   expect(() => watcher.authorizeSocket(watcher.client)).toThrow("this connection can only watch");
 });
+
+it("asks Bun to deflate a frame of 128 UTF-8 bytes or more, counted in bytes and not characters", () => {
+  const sent: [string, boolean | undefined][] = [];
+  const client = { data: connectionData({ deviceId: undefined, readOnly: false }), getBufferedAmount: () => 0, send: (text: string, compress?: boolean) => { sent.push([text, compress]); return 1; } } as unknown as Client;
+  const overhead = JSON.stringify({ type: "error", code: "c", message: "" }).length;
+  const frame = (message: string) => ({ type: "error", code: "c", message }) as const;
+  send(client, frame("x".repeat(127 - overhead)));
+  send(client, frame("x".repeat(128 - overhead)));
+  // 3 bytes each: well under 128 characters, over 128 bytes
+  send(client, frame("한".repeat(Math.ceil((128 - overhead) / 3))));
+  expect(sent.map(([text, compress]) => [Buffer.byteLength(text), compress])).toEqual([[127, false], [128, true], [expect.any(Number), true]]);
+  expect(sent[2]![0].length).toBeLessThan(128);
+});
